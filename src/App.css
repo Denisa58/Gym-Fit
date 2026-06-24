@@ -1,0 +1,336 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap');
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: 'Inter', sans-serif;
+}
+
+/* Fundalul general ultra-dark ca în imagini */
+body {
+  background-color: #121214;
+  color: #ffffff;
+  -webkit-font-smoothing: antialiased;
+}
+
+.app-container {
+  display: flex;
+  min-height: 100vh;
+  background-color: #121214;
+}
+
+/* Meniu Lateral - Minimalist, fără margini rigide */
+.sidebar {
+  width: 260px;
+  background: #000000;
+  padding: 40px 24px;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid #1a1a1e;
+}
+
+.logo {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 50px;
+}
+
+.logo-text {
+  font-size: 26px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: -1px;
+  color: #ffffff;
+}
+
+/* Accentul de verde lime/neon sub logo */
+.logo::after {
+  content: '';
+  display: block;
+  width: 35px;
+  height: 4px;
+  background: #ccff00;
+  border-radius: 2px;
+  margin-top: 4px;
+}
+
+.sidebar ul {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sidebar ul li {
+  padding: 14px 18px;
+  color: #7c7c8a;
+  font-weight: 500;
+  font-size: 15px;
+  border-radius: 14px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.sidebar ul li:hover {
+  color: #ffffff;
+  background: #1a1a1e;
+}
+
+/* Buton activ cu text închis pe fundal verde lime */
+.sidebar ul li.active {
+  color: #000000;
+  background: #ccff00;
+  font-weight: 700;
+  box-shadow: 0 10px 25px rgba(204, 255, 0, 0.15);
+}
+
+/* Zona de conținut din dreapta */
+.content {
+  flex: 1;
+  padding: 50px 60px;
+  overflow-y: auto;
+}
+
+.content-header {
+  margin-bottom: 40px;
+}
+
+.content-header h1 {
+  font-size: 36px;
+  font-weight: 900;
+  letter-spacing: -1px;
+  color: #ffffff;
+  margin-bottom: 6px;
+}
+
+.content-header p {
+  color: #7c7c8a;
+  font-size: 16px;
+}
+
+/* Layout Dashboard stil Mobil Premium */
+.dashboard-layout {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 32px;
+}
+
+.main-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+/* Card Principal cu un banner discret, atletic */
+.hero-card {
+  background: linear-gradient(135deg, #1a1a1e 0%, #0a0a0c 100%);
+  border: 1px solid #29292e;
+  border-radius: 24px;
+  padding: 35px;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Element grafic abstract pe fundal care imită liniile neon din poza ta */
+.hero-card::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  right: -20%;
+  width: 300px;
+  height: 300px;
+  border: 2px solid rgba(204, 255, 0, 0.1);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.hero-card h3 {
+  font-size: 14px;
+  text-transform: uppercase;
+  color: #ccff00;
+  letter-spacing: 2px;
+  margin-bottom: 12px;
+  font-weight: 700;
+}
+
+.hero-card h2 {
+  font-size: 28px;
+  font-weight: 800;
+  max-width: 400px;
+  line-height: 1.3;
+  color: #ffffff;
+}
+
+/* Secțiunile de liste și carduri */
+.dashboard-section h4 {
+  font-size: 18px;
+  font-weight: 700;
+  color: #ffffff;
+  margin-bottom: 20px;
+  letter-spacing: -0.3px;
+}
+
+/* Rândurile cu clienți din Home schimbați în stil de feed premium */
+.live-feed {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.feed-item {
+  background: #1a1a1e;
+  border: 1px solid #29292e;
+  border-radius: 18px;
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  transition: transform 0.2s ease;
+}
+
+.feed-item:hover {
+  transform: translateX(4px);
+  border-color: rgba(204, 255, 0, 0.3);
+}
+
+.member-profile {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+/* Avatar rotund minimalist */
+.member-avatar {
+  width: 44px;
+  height: 44px;
+  background: #29292e;
+  color: #ffffff;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 14px;
+  border: 1px solid #3e3e42;
+}
+
+.member-name {
+  font-weight: 600;
+  font-size: 16px;
+  color: #ffffff;
+  margin-bottom: 2px;
+}
+
+.member-time {
+  font-size: 13px;
+  color: #7c7c8a;
+}
+
+.member-status {
+  font-size: 13px;
+  font-weight: 600;
+  color: #ccff00;
+  background: rgba(204, 255, 0, 0.05);
+  padding: 6px 14px;
+  border-radius: 20px;
+  border: 1px solid rgba(204, 255, 0, 0.1);
+}
+
+/* Panelul din Dreapta - Categorii / Programe rapide */
+.categories-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.category-item {
+  background: #1a1a1e;
+  border: 1px solid #29292e;
+  border-radius: 18px;
+  padding: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+}
+
+.category-item:hover {
+  background: #212126;
+}
+
+.category-title {
+  font-weight: 600;
+  font-size: 15px;
+  color: #ffffff;
+  margin-bottom: 4px;
+}
+
+.category-desc {
+  font-size: 13px;
+  color: #7c7c8a;
+}
+
+.arrow-action {
+  width: 32px;
+  height: 32px;
+  background: #29292e;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  font-size: 12px;
+}
+
+.category-item:hover .arrow-action {
+  background: #ccff00;
+  color: #000000;
+}
+/* Layout-ul pe două coloane pentru Home */
+.dashboard-grid-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr; /* Împarte ecranul exact în două jumătăți egale */
+  gap: 32px;
+  width: 100%;
+}
+
+.dashboard-section-column {
+  background: #1a1a1e;
+  border: 1px solid #29292e;
+  border-radius: 24px;
+  padding: 30px;
+}
+
+.dashboard-section-column h4 {
+  font-size: 18px;
+  font-weight: 700;
+  color: #ffffff;
+  margin-bottom: 24px;
+  letter-spacing: -0.3px;
+}
+
+/* Stiluri mesaje de status */
+.status-message {
+  color: #7c7c8a;
+  padding: 16px;
+  font-size: 14px;
+}
+.status-message.error {
+  color: #ff4757;
+}
+
+/* Personalizare vizuală discretă pentru Traineri (opțional, folosește verdele lime ca accent secundar) */
+.trainer-avatar {
+  border-color: rgba(204, 255, 0, 0.4) !important;
+}
+
+.trainer-status {
+  color: #ffffff !important;
+  background: rgba(255, 255, 255, 0.05) !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
