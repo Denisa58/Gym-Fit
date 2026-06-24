@@ -18,7 +18,6 @@ Log.Logger = new LoggerConfiguration()
     .WriteTo.Console()
     .WriteTo.File("logs/gymfit_log.txt", rollingInterval: RollingInterval.Day)
     .CreateLogger();
-
 builder.Host.UseSerilog();
 
 // 2. REPARARE CORS (Permite aplicației React să ceară date)
@@ -31,11 +30,17 @@ builder.Services.AddCors(options => {
     });
 });
 
-// 3. CONFIGURARE ODATA
+// 3. CONFIGURARE ODATA (Înregistrăm toate tabelele necesare)
 var modelBuilder = new ODataConventionModelBuilder();
 modelBuilder.EntitySet<Clients>("Clients");
 modelBuilder.EntitySet<Admin>("Admins");
-modelBuilder.EntitySet<Membership>("Memberships"); // 🎯 REPARAT: Expunem și tabela de abonamente prin OData!
+modelBuilder.EntitySet<Membership>("Memberships"); // Expusă tabela de abonamente
+
+// 🎯 REPARAT ACUM: Adăugăm tabelele lipsă pentru Săli și Sesiuni + Traineri
+// Astfel OData va ști cum să le serializeze și nu va mai genera crash-ul de runtime la MapControllers!
+modelBuilder.EntitySet<Room>("Rooms");
+modelBuilder.EntitySet<Session>("Sessions");
+modelBuilder.EntitySet<Trainer>("Trainers");
 
 builder.Services.AddControllers()
     .AddOData(options => options
@@ -106,7 +111,6 @@ app.UseRouting();
 
 // 🎯 REPARAT: Ordinea corectă a middleware-urilor pentru a nu bloca request-urile din React
 app.UseCors();
-
 app.UseAuthentication();
 app.UseAuthorization();
 

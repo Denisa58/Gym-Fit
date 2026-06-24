@@ -22,22 +22,19 @@ namespace GymFit.Controllers
         }
 
         [HttpGet]
-        [EnableQuery]
-        public IActionResult Get([FromQuery] int? companyId)
+        [EnableQuery] // 🎯 Permite OData să aplice automat filtrele ($filter, $select etc.) trimise din React
+        public IQueryable<Trainer> Get([FromQuery] int? companyId)
         {
-            // 🎯 FILTRARE LOCALĂ: Dacă frontend-ul trimite un companyId în URL, 
-            // returnăm doar antrenorii din acel oraș/sediu.
+            // 🎯 REPARAT ODATA: Returnăm IQueryable direct pentru ca structura JSON (.value) să fie predictibilă
             if (companyId.HasValue)
             {
-                var localTrainers = _context.Trainers.Where(t => t.CompanyId == companyId.Value);
-                return Ok(localTrainers);
+                return _context.Trainers.Where(t => t.CompanyId == companyId.Value);
             }
 
-            // Dacă din vreun motiv nu se trimite (ex: un cont de Admin Global suprem), îi aducem pe toți
-            return Ok(_context.Trainers);
+            return _context.Trainers;
         }
 
-        // 🎯 RUTA NOUĂ INTRODUSĂ: Rezolvă eroarea 404 din React pentru api/Trainers/{id}
+        // 🎯 RUTA INTRODUSĂ: Rezolvă eroarea 404 din React pentru api/Trainers/{id}
         [HttpGet("{id}")]
         public IActionResult GetById(int id)
         {
@@ -98,7 +95,7 @@ namespace GymFit.Controllers
                     }
                 }
 
-                // Extragem anii trimisi din React
+                // Extragem anii trimiși din React
                 int experienceYears = 0;
                 if (body.TryGetProperty("yearsOfExperience", out var expProp))
                 {
@@ -125,7 +122,6 @@ namespace GymFit.Controllers
 
                 string hashedPassword = BCrypt.Net.BCrypt.HashPassword(password);
 
-                // Instanțiem modelul și mapăm inclusiv noul câmp CompanyId
                 var trainer = new Trainer
                 {
                     FirstName = firstName,
@@ -136,8 +132,6 @@ namespace GymFit.Controllers
                     Role = "Trainer",
                     Specialization = string.IsNullOrEmpty(specialization) ? "General" : specialization,
                     ExperienceYears = experienceYears,
-
-                    // 🎯 SALVAREA ÎN BAZA DE DATE: Mapăm câmpul primit din frontend
                     CompanyId = companyId
                 };
 

@@ -3,12 +3,17 @@ using GymFit.Data;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using System.IO;
+using System.Linq;
+using System.Threading.Tasks;
+using System;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Hosting;
 
 namespace GymFit.Controllers
 {
-    [Route("api/[controller]")]
     [ApiController]
-    public class ProfileController : ControllerBase
+    [Authorize]
+    public class ProfileController : ControllerBase // 🎯 Rămâne ControllerBase (recomandat pentru upload-uri non-OData)
     {
         private readonly GymFitContext _context;
         private readonly IWebHostEnvironment _environment;
@@ -19,7 +24,8 @@ namespace GymFit.Controllers
             _environment = environment;
         }
 
-        [HttpPost("upload-photo")]
+        // 🎯 RUTA EXPLICITĂ: Forțăm ruta fixă pentru a fi recunoscută perfect de router-ul hibrid
+        [HttpPost("api/Profile/upload-photo")]
         public async Task<IActionResult> UploadProfilePicture(IFormFile file, [FromQuery] int userId, [FromQuery] string role)
         {
             // 1. Validăm fișierul primit
@@ -49,7 +55,7 @@ namespace GymFit.Controllers
                 string uniqueFileName = $"{role}_{userId}_{Guid.NewGuid()}{extension}";
                 string filePath = Path.Combine(uploadsFolder, uniqueFileName);
 
-                // 🔥 CORECTAT: Copiem datele din fișierul trimis de React (file) în fileStream-ul de pe hard disk
+                // Copiem datele din fișierul trimis de React (file) în fileStream
                 using (var fileStream = new FileStream(filePath, FileMode.Create))
                 {
                     await file.CopyToAsync(fileStream);

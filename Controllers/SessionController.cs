@@ -3,6 +3,8 @@ using GymFit.models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.OData.Query;
+using Microsoft.AspNetCore.OData.Routing.Controllers; // 🎯 Adăugat pentru ODataController
+using Microsoft.AspNetCore.OData.Formatter;         // 🎯 Adăugat pentru [FromODataUri]
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
@@ -11,10 +13,9 @@ using System.Threading.Tasks;
 
 namespace GymFit.Controllers
 {
-    [Route("api/[controller]")]
     [ApiController]
-    [Authorize] // Utilizatorul trebuie să fie cel puțin logat pentru a interacționa cu sesiunile
-    public class SessionsController : ControllerBase
+    [Authorize]
+    public class SessionsController : ODataController // 🎯 Modificat: Moștenește din ODataController
     {
         private readonly GymFitContext _context;
 
@@ -23,14 +24,13 @@ namespace GymFit.Controllers
             _context = context;
         }
 
-        // --- REZOLVARE AFIȘARE ÎNSCRIERI REALE ȘI FILTRARE COMPANIE ---
-        [HttpGet]
+        // 1. CITEȘTE TOATE SESIUNILE (Ruta OData: GET /odata/Sessions)
+        [HttpGet("odata/Sessions")]
         [EnableQuery]
         public IActionResult Get([FromQuery] int? companyId)
         {
             try
             {
-                // 1. Preluăm sesiunile și aplicăm filtrarea pe baza orașului/sălii (CompanyId)
                 var query = _context.Sessions.AsQueryable();
                 if (companyId.HasValue)
                 {
@@ -40,7 +40,7 @@ namespace GymFit.Controllers
                 var sessions = query.ToList();
                 var allClients = _context.Clients.ToList();
 
-                // 2. Mapăm manual înscrierile clienților în memorie
+                // Mapăm manual înscrierile clienților în memorie (păstrăm logica ta actuală)
                 foreach (var session in sessions)
                 {
                     session.EnrolledClients = new List<Clients>();
@@ -63,16 +63,51 @@ namespace GymFit.Controllers
             }
         }
 
-        [HttpGet("by-date")]
+        // 2. CITEȘTE O SINGURĂ SESIUNE (Ruta OData: GET /odata/Sessions(1))
+        [HttpGet("odata/Sessions({key})")]
+        [EnableQuery]
+        public IActionResult Get([FromODataUri] int key)
+        {
+            var session = _context.Sessions.FirstOrDefault(s => s.Id == key);
+            if (session == null) return NotFound($"Session with ID {key} not found.");
+
+            var allClients = _context.Clients.ToList();
+            session.EnrolledClients = allClients
+                .Where(c => c.EnrolledSessionIds != null && c.EnrolledSessionIds.Contains(session.Id))
+                .ToList();
+
+            return Ok(session);
+        }
+
+        // 3. CREARE SESIUNE SIMPLĂ (Ruta OData: POST /odata/Sessions)
+        [HttpPost("odata/Sessions")]
+        [Authorize(Roles = "Admin,Trainer")]
+        public IActionResult Post([FromBody] Session session)
+        {
+            if (session == null)
+                return BadRequest("Invalid session data.");
+
+            if (session.CompanyId == 0)
+            {
+                session.CompanyId = 1;
+            }
+
+            session.StartTime = DateTime.SpecifyKind(session.StartTime, DateTimeKind.Utc); //  Corect
+            _context.Sessions.Add(session);
+            _context.SaveChanges();
+
+            return Created(session); // Standard OData
+        }
+
+        // 🎯 RUTE HYBRID CUSTOM (Rămân neschimbate ca să se pupe la fix cu formularele din React)
+        [HttpGet("api/Sessions/by-date")]
         public IActionResult GetSessionsByDate([FromQuery] DateTime date, [FromQuery] int? companyId)
         {
             try
             {
                 var utcDate = date.ToUniversalTime().Date;
-
                 var query = _context.Sessions.Where(s => s.StartTime.Date == utcDate);
 
-                // 🎯 FILTRARE LOCALĂ: Aplicăm filtrarea după oraș și la calendarul pe zile
                 if (companyId.HasValue)
                 {
                     query = query.Where(s => s.CompanyId == companyId.Value);
@@ -84,7 +119,6 @@ namespace GymFit.Controllers
                 foreach (var session in sessions)
                 {
                     session.EnrolledClients = new List<Clients>();
-
                     var enrolled = allClients
                         .Where(c => c.EnrolledSessionIds != null && c.EnrolledSessionIds.Contains(session.Id))
                         .ToList();
@@ -103,28 +137,8 @@ namespace GymFit.Controllers
             }
         }
 
-        [HttpPost]
-        [Authorize(Roles = "Admin,Trainer")] // Doar Adminul și Trainerii pot publica o sesiune simplă
-        public IActionResult CreateSession([FromBody] Session session)
-        {
-            if (session == null)
-                return BadRequest("Invalid session data.");
-
-            // 🎯 SIGURANȚĂ: Alocăm sediul central (1) dacă React omite din greșeală CompanyId-ul
-            if (session.CompanyId == 0)
-            {
-                session.CompanyId = 1;
-            }
-
-            session.StartTime = DateTime.SpecifyKind(session.StartTime, DateTimeKind.Utc);
-            _context.Sessions.Add(session);
-            _context.SaveChanges();
-
-            return CreatedAtAction(nameof(Get), new { id = session.Id }, session);
-        }
-
-        [HttpPost("validate-and-create")]
-        [Authorize(Roles = "Admin,Trainer")] // Validarea și publicarea claselor este strict pentru staff
+        [HttpPost("api/Sessions/validate-and-create")]
+        [Authorize(Roles = "Admin,Trainer")]
         public IActionResult CreateWithValidation([FromBody] SessionRequest request)
         {
             if (request.Session == null || request.Room == null)
@@ -137,7 +151,6 @@ namespace GymFit.Controllers
                 return BadRequest("Error: Session capacity exceeds the room's maximum capacity!");
             }
 
-            // 🎯 SIGURANȚĂ: Ne asigurăm că sesiunea preia CompanyId-ul corect trimis în cerere
             if (request.Session.CompanyId == 0)
             {
                 request.Session.CompanyId = 1;
@@ -157,8 +170,8 @@ namespace GymFit.Controllers
             return Ok("Session created successfully!");
         }
 
-        [HttpPost("enroll")]
-        [Authorize] // Clienții se pot înscrie singuri, iar Adminul îi poate înscrie manual din sistem
+        [HttpPost("api/Sessions/enroll")]
+        [Authorize]
         public IActionResult EnrollClient([FromBody] BookingDto request)
         {
             if (request == null || request.SessionId <= 0 || request.UserId <= 0)
@@ -176,7 +189,6 @@ namespace GymFit.Controllers
             }
 
             var client = _context.Clients.FirstOrDefault(c => c.Id == request.UserId);
-
             if (client == null)
             {
                 return BadRequest($"Clientul cu ID-ul {request.UserId} nu a fost găsit în baza de date!");
@@ -184,14 +196,8 @@ namespace GymFit.Controllers
 
             try
             {
-                if (session.EnrolledClients == null)
-                {
-                    session.EnrolledClients = new List<Clients>();
-                }
-                if (client.EnrolledSessionIds == null)
-                {
-                    client.EnrolledSessionIds = new List<int>();
-                }
+                if (session.EnrolledClients == null) session.EnrolledClients = new List<Clients>();
+                if (client.EnrolledSessionIds == null) client.EnrolledSessionIds = new List<int>();
 
                 if (client.EnrolledSessionIds.Contains(request.SessionId) || session.EnrolledClients.Any(c => c.Id == client.Id))
                 {
@@ -202,7 +208,6 @@ namespace GymFit.Controllers
                 client.EnrolledSessionIds.Add(request.SessionId);
 
                 _context.SaveChanges();
-
                 return Ok("🎯 Client enrolled successfully!");
             }
             catch (Exception ex)

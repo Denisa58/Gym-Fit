@@ -4,13 +4,14 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.OData.Query;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.OData.Routing.Controllers;
+using Microsoft.AspNetCore.OData.Formatter; // 👈 Adăugat pentru [FromODataUri]
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
 namespace GymFit.Controllers
 {
-    public class ClientsController : ODataController
+    public class ClientsController : ODataController // Moștenește deja corect ODataController
     {
         private readonly GymFitContext _context;
 
@@ -19,12 +20,12 @@ namespace GymFit.Controllers
             _context = context;
         }
 
+        // GET: odata/Clients
         [HttpGet]
         [EnableQuery]
-        [Authorize(Roles = "Admin")] // Doar Adminul poate vedea lista de clienți
+        [Authorize(Roles = "Admin")]
         public IActionResult Get([FromQuery] int? companyId)
         {
-            // 🎯 FILTRARE LOCALĂ: Dacă se trimite un companyId, aducem doar clienții din acel oraș
             if (companyId.HasValue)
             {
                 var localClients = _context.Clients.Where(c => c.CompanyId == companyId.Value);
@@ -34,15 +35,18 @@ namespace GymFit.Controllers
             return Ok(_context.Clients);
         }
 
+        // GET: odata/Clients(5)
         [HttpGet]
+        [EnableQuery] // 👈 Adăugat pentru a permite expand-uri pe un singur client dacă e nevoie
         [Authorize(Roles = "Admin,Trainer,Client")]
-        public IActionResult Get(int key)
+        public IActionResult Get([FromODataUri] int key) // 🎯 Modificat: Adăugat [FromODataUri] conform convenției OData
         {
             var client = _context.Clients.FirstOrDefault(c => c.Id == key);
             if (client == null) return NotFound("Clientul nu a fost găsit.");
             return Ok(client);
         }
 
+        // POST: odata/Clients
         [HttpPost]
         public IActionResult Post([FromBody] Clients newClient)
         {
@@ -53,8 +57,6 @@ namespace GymFit.Controllers
                 return BadRequest("Eroare: Acest email este deja înregistrat.");
             }
 
-            // 🎯 Dacă dintr-un motiv oarecare React nu trimite CompanyId (ex: la autoregistrare publică pe site),
-            // îi punem o valoare implicită 1 (Sediu central). Dacă vine de la Admin, va avea deja valoarea din payload.
             if (newClient.CompanyId == 0)
             {
                 newClient.CompanyId = 1;
@@ -63,12 +65,13 @@ namespace GymFit.Controllers
             _context.Clients.Add(newClient);
             _context.SaveChanges();
 
-            return Created(newClient);
+            return Created(newClient); // Returnează corect entitatea în stil OData
         }
 
-        [HttpPost("choose-membership")]
+        // 🎯 Rute speciale hibrid pentru acțiuni (se asigură că merg direct fără configurări EDM complexe)
+        [HttpPost("odata/Clients({clientId})/choose-membership")]
         [Authorize]
-        public IActionResult ChooseMembership(int clientId, int membershipId)
+        public IActionResult ChooseMembership([FromRoute] int clientId, [FromQuery] int membershipId)
         {
             var client = _context.Clients.FirstOrDefault(c => c.Id == clientId);
             if (client == null) return NotFound("Clientul nu a fost găsit.");
@@ -87,9 +90,9 @@ namespace GymFit.Controllers
             });
         }
 
-        [HttpPost("enroll")]
+        [HttpPost("odata/Clients({clientId})/enroll")]
         [Authorize]
-        public IActionResult Enroll(int clientId, int sessionId)
+        public IActionResult Enroll([FromRoute] int clientId, [FromQuery] int sessionId)
         {
             var client = _context.Clients.FirstOrDefault(c => c.Id == clientId);
 
@@ -108,9 +111,10 @@ namespace GymFit.Controllers
             return NotFound("Clientul nu a fost găsit sau este inactiv.");
         }
 
+        // DELETE: odata/Clients(5)
         [HttpDelete]
         [Authorize(Roles = "Admin")]
-        public IActionResult Delete(int key)
+        public IActionResult Delete([FromODataUri] int key) // 🎯 Modificat: Adăugat [FromODataUri] conform convenției OData
         {
             var client = _context.Clients.FirstOrDefault(c => c.Id == key);
             if (client != null)

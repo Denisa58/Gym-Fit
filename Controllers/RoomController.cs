@@ -3,41 +3,56 @@ using GymFit.models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.OData.Query;
+using Microsoft.AspNetCore.OData.Routing.Controllers; // 🎯 Adăugat pentru ODataController
+using Microsoft.AspNetCore.OData.Formatter;         // 🎯 Adăugat pentru [FromODataUri]
+using System;
 using System.Linq;
 
 namespace GymFit.Controllers
 {
-    [Route("api/[controller]")]
     [ApiController]
-    [Authorize] // Utilizatorul trebuie să fie cel puțin logat pentru a accesa controllerul
-    public class RoomController : ControllerBase
+    [Authorize]
+    public class RoomController : ODataController // 🎯 Modificat: Moștenește acum din ODataController
     {
         private readonly GymFitContext _context;
 
-        // Dependency Injection of the database context
         public RoomController(GymFitContext context)
         {
             _context = context;
         }
 
-        [HttpGet]
+        // 1. CITEȘTE TOATE SĂLILE (Ruta OData: GET /odata/Rooms)
+        [HttpGet("odata/Rooms")]
         [EnableQuery]
         public IActionResult Get([FromQuery] int? companyId)
         {
-            // 🎯 FILTRARE LOCALĂ: Dacă frontend-ul trimite un companyId în URL,
-            // aducem doar sălile fizice din acel oraș/sediu.
+            // 🎯 COMANPATIBILITATE HYBRIDĂ: Dacă frontend-ul trimite încă parametrul clasic în query (?companyId=x)
             if (companyId.HasValue)
             {
                 var localRooms = _context.Rooms.Where(r => r.CompanyId == companyId.Value);
                 return Ok(localRooms);
             }
 
-            // Returnăm DbSet-ul direct din baza de date în caz că nu se trimite filtru
+            // Returnăm DbSet-ul direct; OData va aplica automat filtrele server-side ($filter, $select etc.)
             return Ok(_context.Rooms);
         }
 
-        [HttpPost]
-        [Authorize(Roles = "Admin")] // Doar utilizatorii cu rolul "Admin" pot crea o sală
+        // 2. CITEȘTE O SINGURĂ SALĂ (Ruta OData: GET /odata/Rooms(1))
+        [HttpGet("odata/Rooms({key})")]
+        [EnableQuery]
+        public IActionResult Get([FromODataUri] int key)
+        {
+            var room = _context.Rooms.FirstOrDefault(r => r.Id == key);
+
+            if (room == null)
+                return NotFound($"Room with ID {key} not found.");
+
+            return Ok(room);
+        }
+
+        // 3. ADĂUGARE SALĂ NOUĂ (POST /odata/Rooms)
+        [HttpPost("odata/Rooms")]
+        [Authorize(Roles = "Admin")]
         public IActionResult Post([FromBody] Room room)
         {
             if (room == null)
@@ -50,22 +65,22 @@ namespace GymFit.Controllers
 
             if (!string.IsNullOrEmpty(companyIdClaim) && int.TryParse(companyIdClaim, out int tokenCompanyId))
             {
-                room.CompanyId = tokenCompanyId; // Îi punem automat ID-ul sediului de unde aparține Adminul
+                room.CompanyId = tokenCompanyId;
             }
             else if (room.CompanyId == 0)
             {
-                room.CompanyId = 1; // Fallback final pe sediul central
+                room.CompanyId = 1;
             }
 
             try
             {
                 _context.Rooms.Add(room);
-                _context.SaveChanges(); // Persisting the data to the database
-                return Ok(room);
+                _context.SaveChanges();
+
+                return Created(room); // Standard OData returnează 201 Created prin metoda specială Created()
             }
-            catch (System.Exception ex)
+            catch (Exception ex)
             {
-                // Returnăm eroarea reală a bazei de date ca să o vedem la test dacă mai crapă ceva
                 return StatusCode(500, $"Database error: {ex.InnerException?.Message ?? ex.Message}");
             }
         }

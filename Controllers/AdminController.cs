@@ -3,42 +3,44 @@ using GymFit.models;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.OData.Query;
+using Microsoft.AspNetCore.OData.Routing.Controllers; // 👈 Adăugat pentru ODataController
+using Microsoft.AspNetCore.OData.Formatter;           // 👈 Adăugat pentru FromODataUri
 using System;
 using System.Linq;
 
 namespace GymFit.Controllers
 {
-    [Route("api/[controller]")]
-    [ApiController]
     [Authorize(Roles = "Admin")]
-    public class AdminController : ControllerBase
+    public class AdminsController : ODataController // 🎯 Modificat: Moștenește ODataController și am eliminat [Route("api/[controller]")]
     {
         private readonly GymFitContext _context;
 
-        // Dependency Injection: Injecting the database context
-        public AdminController(GymFitContext context)
+        public AdminsController(GymFitContext context)
         {
             _context = context;
         }
 
+        // GET: odata/Admins
         [HttpGet]
         [EnableQuery]
         public IActionResult Get()
         {
-            // Returns all admins from the database
             return Ok(_context.Admins);
         }
 
-        [HttpGet("{id}")]
-        public IActionResult GetById(int id)
+        // GET: odata/Admins(5)
+        [HttpGet]
+        [EnableQuery]
+        public IActionResult Get([FromODataUri] int key) // 🎯 Modificat conform convențiilor OData (numele metodei și parametrul 'key')
         {
-            var admin = _context.Admins.FirstOrDefault(a => a.Id == id);
+            var admin = _context.Admins.FirstOrDefault(a => a.Id == key);
             if (admin == null)
                 return NotFound("Admin not found.");
 
             return Ok(admin);
         }
 
+        // POST: odata/Admins
         [HttpPost]
         public IActionResult Post([FromBody] System.Text.Json.JsonElement body)
         {
@@ -50,8 +52,7 @@ namespace GymFit.Controllers
                 string lastName = body.GetProperty("lastName").GetString();
                 string phoneNumber = body.TryGetProperty("phoneNumber", out var phoneProp) ? phoneProp.GetString() : "";
 
-                // Extragem ID-ul companiei trimis din React
-                int companyId = 1; // ⚠️ ASIGURĂ-TE CĂ ID-ul 1 EXISTĂ ÎN TABELA COMPANIES!
+                int companyId = 1;
                 if (body.TryGetProperty("companyId", out var compProp))
                 {
                     if (compProp.ValueKind == System.Text.Json.JsonValueKind.Number)
@@ -75,12 +76,10 @@ namespace GymFit.Controllers
                     return BadRequest("Un administrator cu acest email există deja în baza de date.");
                 }
 
-                // Criptăm parola
                 string hashedPassword = BCrypt.Net.BCrypt.HashPassword(password);
 
-                // 🎯 REZOLVARE CS7036: Apelăm constructorul cu parametri definit în clasa Admin
                 var newAdmin = new Admin(
-                    0, // ID primar autogenerat de DB
+                    0,
                     firstName,
                     lastName,
                     email,
@@ -90,26 +89,29 @@ namespace GymFit.Controllers
                 );
 
                 _context.Admins.Add(newAdmin);
-                _context.SaveChanges(); // Salvează în PostgreSQL
+                _context.SaveChanges();
 
-                return CreatedAtAction(nameof(GetById), new { id = newAdmin.Id }, newAdmin);
+                // 🎯 Modificat: Pentru OData, returnăm entitatea creată folosind metoda "Created(entity)"
+                return Created(newAdmin);
             }
             catch (Exception ex)
             {
                 return StatusCode(500, $"Eroare internă la crearea administratorului: {ex.Message}");
             }
         }
-        [HttpDelete("{id}")]
-        public IActionResult Delete(int id)
+
+        // DELETE: odata/Admins(5)
+        [HttpDelete]
+        public IActionResult Delete([FromODataUri] int key) // 🎯 Modificat conform convențiilor OData
         {
-            var admin = _context.Admins.FirstOrDefault(a => a.Id == id);
+            var admin = _context.Admins.FirstOrDefault(a => a.Id == key);
             if (admin == null)
                 return NotFound("Admin not found.");
 
             _context.Admins.Remove(admin);
-            _context.SaveChanges(); // Removes from database
+            _context.SaveChanges();
 
-            return NoContent(); // Success, no content to return
+            return NoContent();
         }
     }
 }
