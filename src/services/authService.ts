@@ -27,9 +27,7 @@ export const authService = {
     },
 
     // 2. Funcția de Register
-    // 2. Funcția de Register modificată pentru mapare exactă C# PascalCase
     register: async (userData: any) => {
-        // Ne asigurăm că trimitem toate câmpurile, forțând CompanyId cu literă mare dacă .NET-ul e strict
         const payload = {
             FirstName: userData.firstName,
             LastName: userData.lastName,
@@ -47,7 +45,6 @@ export const authService = {
             body: JSON.stringify(payload),
         });
 
-        // Verificăm dacă răspunsul este JSON înainte de a da .json() pentru a evita crash-uri de parsare
         const contentType = response.headers.get("content-type");
         const data = contentType && contentType.indexOf("application/json") !== -1
             ? await response.json()
@@ -62,24 +59,23 @@ export const authService = {
 
     // 3. Funcția de Logout
     logout: () => {
-        localStorage.removeItem("userToken"); // Curățăm și token-ul la logout
+        localStorage.removeItem("userToken");
         localStorage.removeItem("userRole");
         localStorage.removeItem("userId");
         localStorage.removeItem("userName");
-        localStorage.removeItem("companyId"); // 🎯 Ștergem și ID-ul companiei la logout
-        window.location.href = "/login"; // Redirecționare la login
+        localStorage.removeItem("companyId");
+        window.location.href = "/login";
     },
 
     // 4. Funcția de Preluare Abonamente
     getMemberships: async () => {
-        // Luăm tokenul din localStorage pentru a trece de protecția [Authorize] din C#
         const token = localStorage.getItem('userToken');
 
-        const response = await fetch("https://localhost:7104/api/Memberships", {
+        // Trecut corect pe endpoint-ul de OData
+        const response = await fetch("https://localhost:7104/odata/Memberships", {
             method: "GET",
             headers: {
                 "Content-Type": "application/json",
-                // Trimitem tokenul în formatul standard Bearer
                 "Authorization": token ? `Bearer ${token}` : ''
             }
         });
@@ -88,6 +84,9 @@ export const authService = {
             throw new Error("Nu s-au putut încărca abonamentele.");
         }
 
-        return await response.json();
+        const data = await response.json();
+
+
+        return data.value || data;
     }
 };

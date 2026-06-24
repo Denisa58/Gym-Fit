@@ -59,7 +59,7 @@ const Home = () => {
         return 'dashboard';
     });
 
-    // 🎯 REPARAT: Pornim direct cu starea că nu există abonament activ pentru a evita blocarea butonului de Buy
+    // 🎯 Pornim direct cu starea că nu există abonament activ pentru a evita blocarea butonului de Buy
     const [membershipName, setMembershipName] = React.useState('No Active Membership');
 
     const [rooms, setRooms] = React.useState([]);
@@ -120,17 +120,45 @@ const Home = () => {
                 'Authorization': token ? `Bearer ${token}` : ''
             };
 
-            // 1. Încărcare Săli, Antrenamente și Sesiuni standard
-            const rResponse = await fetch(`https://localhost:7104/api/Room?companyId=${storedCompanyId}`, { headers: headersConfig });
-            if (rResponse.ok) setRooms(await rResponse.json());
+            // 1. Încărcare Săli
+            const rResponse = await fetch(`https://localhost:7104/odata/Rooms?companyId=${storedCompanyId}`, { headers: headersConfig });
+            if (rResponse.ok) {
+                const rData = await rResponse.json();
+                const rawRooms = rData.value || rData || [];
+                setRooms(rawRooms.map((r: any) => ({
+                    ...r,
+                    id: r.Id ?? r.id,
+                    name: r.Name ?? r.name,
+                    maxCapacity: r.MaxCapacity ?? r.maxCapacity,
+                    equipmentType: r.EquipmentType ?? r.equipmentType,
+                    isAvailable: r.IsAvailable ?? r.isAvailable
+                })));
+            }
 
+            // 2. Încărcare Tipuri de Antrenament (Workouts) + Aliniere IQueryable OData
             const wResponse = await fetch(`https://localhost:7104/api/Workouts?companyId=${storedCompanyId}`, { headers: headersConfig });
-            if (wResponse.ok) setWorkouts(await wResponse.json());
+            if (wResponse.ok) {
+                const wData = await wResponse.json();
+                const rawWorkouts = wData.value || wData || [];
+                setWorkouts(rawWorkouts.map((w: any) => ({
+                    ...w,
+                    id: w.id ?? w.Id,
+                    name: w.name ?? w.Name,
+                    description: w.description ?? w.Description,
+                    difficultyLevel: w.difficultyLevel ?? w.DifficultyLevel,
+                    estimatedDuration: w.estimatedDuration ?? w.EstimatedDuration,
+                    averageCaloriesBurned: w.averageCaloriesBurned ?? w.AverageCaloriesBurned
+                })));
+            }
 
-            const sResponse = await fetch(`https://localhost:7104/api/Sessions?companyId=${storedCompanyId}`, { headers: headersConfig });
-            if (sResponse.ok) setSessions(await sResponse.json());
+            // 3. Încărcare Sesiuni brute prin OData
+            const sResponse = await fetch(`https://localhost:7104/odata/Sessions?companyId=${storedCompanyId}&$expand=EnrolledClients`, { headers: headersConfig });
+            if (sResponse.ok) {
+                const sData = await sResponse.json();
+                setSessions(sData.value || sData || []);
+            }
 
-            // 🎯 REPARARE FETCH CLIENT FOLOSIND RUTA CORECTĂ ODATA CONFIGURATĂ PE SERVER (/odata/)
+            // 4. Preluare date Client prin OData
             if (role === 'Client' && userId && userId !== 'undefined' && userId !== 'null') {
                 try {
                     let userResponse = null;
@@ -143,7 +171,6 @@ const Home = () => {
                         userData = result.value ? (Array.isArray(result.value) ? result.value[0] : result.value) : result;
                     }
 
-                    // Dacă am reușit să extragem utilizatorul din baza de date
                     if (userData) {
                         const dbFirstName = userData.firstName || userData.FirstName;
                         const dbLastName = userData.lastName || userData.LastName;
@@ -153,10 +180,8 @@ const Home = () => {
                             setUserName(fullDbName);
                         }
 
-                        // Extragere și mapare dinamică MembershipId din baza de date
                         const rawMembershipId = userData.membershipId || userData.MembershipId;
 
-                        // 🎯 REPARAT: Dacă în baza de date nu este selectat niciun abonament (null sau 0)
                         if (!rawMembershipId || rawMembershipId === 0) {
                             setMembershipName("No Active Membership");
                             localStorage.removeItem(`membershipId_${userId}`);
@@ -174,7 +199,6 @@ const Home = () => {
                                 processMembershipFallback(rawMembershipId);
                             }
 
-                            // Extragere dată activare abonament doar dacă există un plan selectat
                             const dbActivatedAt = userData.membershipActivatedAt || userData.MembershipActivatedAt;
                             if (dbActivatedAt) {
                                 localStorage.setItem(`membershipActivatedAt_${userId}`, dbActivatedAt);
@@ -194,6 +218,7 @@ const Home = () => {
                 setUserName('Administrator');
             }
 
+            // 5. Încărcare Antrenori + Normalizare structură OData
             try {
                 const tResponse = await fetch(`https://localhost:7104/api/Trainers?companyId=${storedCompanyId}`, {
                     method: 'GET',
@@ -201,8 +226,19 @@ const Home = () => {
                 });
                 if (tResponse.ok) {
                     const tData = await tResponse.json();
-                    if (tData && tData.value) setTrainers(tData.value);
-                    else if (Array.isArray(tData)) setTrainers(tData);
+                    const rawTrainers = tData.value || tData || [];
+
+                    setTrainers(rawTrainers.map((t: any) => ({
+                        ...t,
+                        id: t.id ?? t.Id,
+                        firstName: t.firstName ?? t.FirstName,
+                        lastName: t.lastName ?? t.LastName,
+                        email: t.email ?? t.Email,
+                        phoneNumber: t.phoneNumber ?? t.PhoneNumber,
+                        specialization: t.specialization ?? t.Specialization,
+                        yearsOfExperience: t.yearsOfExperience ?? t.YearsOfExperience ?? t.experienceYears ?? t.ExperienceYears ?? 0,
+                        companyId: t.companyId ?? t.CompanyId
+                    })));
                 }
             } catch (e) {
                 console.error("Error loading trainers:", e);
@@ -212,7 +248,6 @@ const Home = () => {
         }
     };
 
-    // Helper pentru maparea ID-urilor scalare în caz că nu avem denumirea în DB
     const processMembershipFallback = (rawId: any) => {
         if (rawId) {
             const mId = parseInt(rawId, 10);
@@ -226,15 +261,12 @@ const Home = () => {
         }
     };
 
-    // SAFENET FALLBACK
     const executeFinalFallback = () => {
         const savedMembershipId = localStorage.getItem(`membershipId_${userId}`) || localStorage.getItem('membershipId');
         if (savedMembershipId) {
             processMembershipFallback(savedMembershipId);
             return;
         }
-
-        // Dacă nu există informații clare în storage și nici din DB, înseamnă că nu are plan activ
         setMembershipName("No Active Membership");
     };
 
@@ -263,7 +295,7 @@ const Home = () => {
             };
 
             const token = localStorage.getItem('token') || localStorage.getItem('userToken');
-            const response = await fetch('https://localhost:7104/api/Room', {
+            const response = await fetch('https://localhost:7104/odata/Rooms', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -316,18 +348,18 @@ const Home = () => {
         e.preventDefault();
         setSessionError('');
 
-        const selectedRoom: any = rooms.find((r: any) => r.id === parseInt(sessionForm.roomId, 10) || r.Id === parseInt(sessionForm.roomId, 10));
-        const selectedWorkout: any = workouts.find((w: any) => w.id === parseInt(sessionForm.workoutId, 10) || w.Id === parseInt(sessionForm.workoutId, 10));
+        const selectedRoom: any = rooms.find((r: any) => r.id === parseInt(sessionForm.roomId, 10));
+        const selectedWorkout: any = workouts.find((w: any) => w.id === parseInt(sessionForm.workoutId, 10));
 
         if (!selectedRoom || !selectedWorkout) {
             setSessionError("Please select a valid room and workout.");
             return;
         }
 
-        const durationMinutes = selectedWorkout.estimatedDuration || selectedWorkout.EstimatedDuration || 50;
+        const durationMinutes = selectedWorkout.estimatedDuration || 50;
         const startDate = new Date(sessionForm.startTime);
         const endDate = new Date(startDate.getTime() + durationMinutes * 60000);
-        const finalCapacity = parseInt(selectedRoom.maxCapacity || selectedRoom.MaxCapacity, 10);
+        const finalCapacity = parseInt(selectedRoom.maxCapacity, 10);
 
         const combinedPayload = {
             session: {
@@ -340,10 +372,10 @@ const Home = () => {
                 companyId: companyIdInt
             },
             room: {
-                id: selectedRoom.id || selectedRoom.Id,
-                name: selectedRoom.name || selectedRoom.Name || "Selected Room",
+                id: selectedRoom.id,
+                name: selectedRoom.name || "Selected Room",
                 maxCapacity: finalCapacity,
-                equipmentType: selectedRoom.equipmentType || selectedRoom.EquipmentType || "General Equipment",
+                equipmentType: selectedRoom.equipmentType || "General Equipment",
                 isAvailable: selectedRoom.isAvailable !== undefined ? selectedRoom.isAvailable : true,
                 companyId: companyIdInt
             }
@@ -427,13 +459,64 @@ const Home = () => {
     };
 
     const getActiveAndUpcomingSessions = () => {
-        return sessions
+        if (!sessions || sessions.length === 0) return [];
+
+        return [...sessions]
             .filter((s: any) => {
-                let startTimeRaw = s.startTime || s.StartTime;
-                if (startTimeRaw && typeof startTimeRaw === 'string' && !startTimeRaw.endsWith('Z')) startTimeRaw += 'Z';
-                return new Date(startTimeRaw) >= currentTime;
+                let startTimeRaw = s.StartTime ?? s.startTime;
+                if (!startTimeRaw) return false;
+
+                let sessionDate = new Date(startTimeRaw);
+
+                if (typeof startTimeRaw === 'string' && !startTimeRaw.endsWith('Z') && !startTimeRaw.includes('+')) {
+                    sessionDate = new Date(startTimeRaw + 'Z');
+                }
+
+                if (isNaN(sessionDate.getTime())) return false;
+
+                const currentWorkoutId = s.WorkoutId ?? s.workoutId;
+                const matchedWorkout = workouts.find((w: any) => (w.id ?? w.Id) === currentWorkoutId);
+                const durationMinutes = matchedWorkout?.estimatedDuration ?? matchedWorkout?.EstimatedDuration ?? 50;
+
+                const sessionEndDate = new Date(sessionDate.getTime() + durationMinutes * 60000);
+
+                return sessionEndDate >= currentTime;
             })
-            .sort((a: any, b: any) => new Date(a.startTime || a.StartTime).getTime() - new Date(b.startTime || b.StartTime).getTime());
+            .sort((a: any, b: any) => {
+                const timeA = new Date(a.StartTime || a.startTime).getTime() || 0;
+                const timeB = new Date(b.StartTime || b.startTime).getTime() || 0;
+                return timeA - timeB;
+            })
+            .map((s: any) => {
+                const currentWorkoutId = s.WorkoutId ?? s.workoutId;
+                const matchedWorkout = workouts.find((w: any) => String(w.id ?? w.Id) === String(currentWorkoutId));
+
+                const normalizedWorkout = matchedWorkout ? {
+                    ...matchedWorkout,
+                    id: matchedWorkout.id ?? matchedWorkout.Id,
+                    name: matchedWorkout.name ?? matchedWorkout.Name,
+                    description: matchedWorkout.description ?? matchedWorkout.Description,
+                    estimatedDuration: matchedWorkout.estimatedDuration ?? matchedWorkout.EstimatedDuration
+                } : null;
+
+                const actualEnrolledClients = s.EnrolledClients ?? s.enrolledClients ?? [];
+
+                return {
+                    ...s,
+                    id: s.Id ?? s.id,
+                    startTime: s.StartTime ?? s.startTime,
+                    endTime: s.EndTime ?? s.endTime,
+                    workoutId: currentWorkoutId,
+                    roomId: s.RoomId ?? s.roomId,
+                    trainerId: s.TrainerId ?? s.trainerId,
+                    companyId: s.CompanyId ?? s.companyId,
+                    maxCapacity: s.MaxCapacity ?? s.maxCapacity,
+                    enrolledClients: actualEnrolledClients,
+                    EnrolledClients: actualEnrolledClients,
+                    workout: normalizedWorkout,
+                    Workout: normalizedWorkout
+                };
+            });
     };
 
     const getTopNavBtnStyle = (tabName: string) => {
@@ -459,11 +542,21 @@ const Home = () => {
                     <button onClick={() => setActiveTab('dashboard')} style={getTopNavBtnStyle('dashboard')}>Home</button>
                     {role === 'Client' && <button onClick={() => setActiveTab('memberships')} style={getTopNavBtnStyle('memberships')}>Memberships</button>}
                     <button onClick={() => history.push('/profile')} style={getTopNavBtnStyle('profile')}>Profile</button>
+
+                    {/* 🔓 ACCES ADMIN */}
                     {role === 'Admin' && (
                         <>
                             <button onClick={() => setActiveTab('rooms')} style={getTopNavBtnStyle('rooms')}>Rooms</button>
                             <button onClick={() => setActiveTab('add-trainer')} style={getTopNavBtnStyle('add-trainer')}>New Trainer</button>
                             <button onClick={() => setActiveTab('manage-memberships')} style={getTopNavBtnStyle('manage-memberships')}>Manage Memberships</button>
+                        </>
+                    )}
+
+                    {/* 🔓 ACCES MIXT: ADMIN & TRAINER (Corectat: redă butoanele de Workout și Clase) */}
+                    {(role === 'Admin' || role === 'Trainer') && (
+                        <>
+                            <button onClick={() => setActiveTab('workouts')} style={getTopNavBtnStyle('workouts')}>New Workout</button>
+                            <button onClick={() => setActiveTab('sessions')} style={getTopNavBtnStyle('sessions')}>Schedule Class</button>
                         </>
                     )}
                 </div>
@@ -492,7 +585,6 @@ const Home = () => {
                     )
                 )}
 
-                {/* Transmitem mai departe membershipName către componentă pentru validarea butoanelor */}
                 {activeTab === 'memberships' && <MembershipCards membershipName={membershipName} />}
                 {role === 'Admin' && activeTab === 'manage-memberships' && <MembershipsTab />}
                 {role === 'Admin' && activeTab === 'rooms' && <RoomsTab rooms={rooms} roomForm={roomForm} onInputChange={handleRoomInputChange} onSubmit={handleCreateRoom} />}

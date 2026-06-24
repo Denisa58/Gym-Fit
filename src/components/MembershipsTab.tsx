@@ -3,7 +3,6 @@
 import React from 'react';
 
 const MembershipsTab = () => {
-    // Folosim sintaxa stabilă React.useState pentru a ocoli complet erorile din IDE
     const [memberships, setMemberships] = React.useState([]);
     const [form, setForm] = React.useState({
         name: '', price: '', durationMonths: 1, description: '',
@@ -17,7 +16,7 @@ const MembershipsTab = () => {
     const loadMemberships = async () => {
         try {
             const token = localStorage.getItem('userToken');
-            const res = await fetch("https://localhost:7104/api/Memberships", {
+            const res = await fetch("https://localhost:7104/odata/Memberships", {
                 headers: { "Authorization": `Bearer ${token}` }
             });
             if (res.ok) {
@@ -45,7 +44,8 @@ const MembershipsTab = () => {
                 maxWorkoutsPerWeek: parseInt(form.maxWorkoutsPerWeek, 10)
             };
 
-            const res = await fetch("https://localhost:7104/api/Memberships", {
+            // 🎯 MODIFICAT: Rută OData Nativă (odata/Memberships) în loc de api/Memberships
+            const res = await fetch("https://localhost:7104/odata/Memberships", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -79,7 +79,9 @@ const MembershipsTab = () => {
         if (!window.confirm("Are you sure you want to delete this membership plan?")) return;
         try {
             const token = localStorage.getItem('userToken');
-            const res = await fetch(`https://localhost:7104/api/Memberships/${id}`, {
+
+            // 🎯 MODIFICAT: Sintaxă OData cu paranteze rotunde pentru ID: odata/Memberships(id)
+            const res = await fetch(`https://localhost:7104/odata/Memberships(${id})`, {
                 method: "DELETE",
                 headers: { "Authorization": `Bearer ${token}` }
             });
@@ -117,7 +119,6 @@ const MembershipsTab = () => {
                     </div>
 
                     <div>
-                        {/* 🎯 MODIFICAT: Din RON în EUR */}
                         <label style={labelStyle}>Price (EUR)</label>
                         <input type="number" name="price" placeholder="e.g. 40" className="form-input"
                                value={form.price} onChange={handleInputChange} required />
@@ -192,7 +193,6 @@ const MembershipsTab = () => {
                                 <div>
                                     <strong style={{ color: '#ccff00', fontSize: '16px' }}>{m.name || m.Name}</strong>
                                     <div style={{ fontSize: '13px', color: '#aaa', marginTop: '4px' }}>
-                                        {/* 🎯 MODIFICAT: Afișare cu € în loc de RON */}
                                         💰 {m.price || m.Price} € | 🕒 {m.durationMonths || m.DurationMonths} {m.durationMonths === 1 ? 'Month' : 'Months'}
                                     </div>
                                 </div>

@@ -11,7 +11,7 @@ const AddTrainerAdminTab = () => {
         phoneNumber: '',
         specialization: '',
         yearsOfExperience: '',
-        companyId: '1',
+        companyId: localStorage.getItem('companyId') || '1', // 🎯 Dinamicizare: pornește cu sediul curent selectat
         accountType: 'Trainer'
     });
     const [message, setMessage] = React.useState('');
@@ -49,7 +49,7 @@ const AddTrainerAdminTab = () => {
         };
 
         const apiUrl = formData.accountType === 'Admin'
-            ? 'https://localhost:7104/api/Admin'
+            ? 'https://localhost:7104/odata/Admins'
             : 'https://localhost:7104/api/Trainers';
 
         try {
@@ -65,7 +65,13 @@ const AddTrainerAdminTab = () => {
             });
 
             if (response.ok) {
-                setMessage(`The ${formData.accountType} account has been successfully registered to the selected gym branch!`);
+                // 🎯 REPARARE CITIRE RĂSPUNS: Încercăm să parsăm JSON-ul trimis de backend ({ message: "..." })
+                try {
+                    const data = await response.json();
+                    setMessage(data.message || `The ${formData.accountType} account has been successfully registered to the selected gym branch!`);
+                } catch (jsonErr) {
+                    setMessage(`The ${formData.accountType} account has been successfully registered to the selected gym branch!`);
+                }
 
                 setFormData({
                     firstName: '',
@@ -98,7 +104,6 @@ const AddTrainerAdminTab = () => {
             {message && <div style={{ color: '#ccff00', backgroundColor: 'rgba(204,255,0,0.1)', padding: '12px', borderRadius: '6px', marginBottom: '15px', fontSize: '14px' }}>✔️ {message}</div>}
             {error && <div style={{ color: '#ff4d4d', backgroundColor: 'rgba(255,77,77,0.1)', padding: '12px', borderRadius: '6px', marginBottom: '15px', fontSize: '14px' }}>⚠️ {error}</div>}
 
-            {/* 🛑 OPRIM AUTOCOMPLETE LA NIVEL DE FORMULAR */}
             <form onSubmit={handleSubmit} autoComplete="off" style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
 
                 {/* 🔘 ACCOUNT TYPE SELECTION */}
@@ -147,7 +152,6 @@ const AddTrainerAdminTab = () => {
                 {/* TEMPORARY PASSWORD */}
                 <div>
                     <label style={{ fontSize: '12px', color: '#888', marginBottom: '5px', display: 'block' }}>Temporary Password</label>
-                    {/* Folosim new-password pentru a forța browserele moderne precum Chrome/Edge să nu introducă parola curentă a adminului */}
                     <input type="password" name="password" placeholder="Enter a secure temporary password" value={formData.password} onChange={handleChange} required autoComplete="new-password" style={inputStyle} />
                 </div>
 

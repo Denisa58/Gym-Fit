@@ -33,12 +33,30 @@ const PublishSessionsTab = ({ workouts, rooms, trainers, userId, onSessionCreate
         // Combinăm data și ora într-un format ISO acceptat de .NET (ex: 2026-06-21T16:00:00)
         const combinedStartDateTime = `${sessionForm.date}T${sessionForm.startTime}:00`;
 
+        // Preluăm locația curentă selectată global în sistem
+        const storedCompanyId = localStorage.getItem('companyId') || '1';
+        const companyIdInt = parseInt(storedCompanyId, 10);
+
+        const selectedRoom: any = rooms.find((r: any) => r.id === parseInt(sessionForm.roomId, 10));
+
+        // 🎯 STRUCTURĂ HIBRIDĂ ALINIATĂ CU VALIDAREA DIN BACKEND
         const payload = {
-            workoutId: parseInt(sessionForm.workoutId),
-            roomId: parseInt(sessionForm.roomId),
-            trainerId: parseInt(sessionForm.trainerId),
-            startTime: combinedStartDateTime,
-            availableSlots: parseInt(sessionForm.availableSlots)
+            session: {
+                workoutId: parseInt(sessionForm.workoutId, 10),
+                roomId: parseInt(sessionForm.roomId, 10),
+                trainerId: parseInt(sessionForm.trainerId, 10),
+                startTime: combinedStartDateTime,
+                maxCapacity: parseInt(sessionForm.availableSlots, 10),
+                companyId: companyIdInt
+            },
+            room: selectedRoom ? {
+                id: selectedRoom.id,
+                name: selectedRoom.name || "Selected Room",
+                maxCapacity: parseInt(selectedRoom.maxCapacity || selectedRoom.maxCapacity, 10),
+                equipmentType: selectedRoom.equipmentType || "General",
+                isAvailable: selectedRoom.isAvailable !== undefined ? selectedRoom.isAvailable : true,
+                companyId: companyIdInt
+            } : null
         };
 
         try {
@@ -120,7 +138,8 @@ const PublishSessionsTab = ({ workouts, rooms, trainers, userId, onSessionCreate
                         color: '#fff'
                     }}>
                         <option value="">-- Alege Sala --</option>
-                        {rooms.map((r: any) => <option key={r.id} value={r.id}>{r.name || r.Name} (Capacitate: {r.capacity})</option>)}
+                        {/* 🎯 REPARARE CHEIE: Am înlocuit r.capacity cu r.maxCapacity pentru a corespunde normalizării */}
+                        {rooms.map((r: any) => <option key={r.id} value={r.id}>{r.name || r.Name} (Capacitate: {r.maxCapacity || r.MaxCapacity || 0})</option>)}
                     </select>
                 </div>
 
