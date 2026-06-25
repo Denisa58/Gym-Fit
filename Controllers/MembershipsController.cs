@@ -12,9 +12,8 @@ using Microsoft.EntityFrameworkCore;
 
 namespace GymFit.Controllers
 {
-    [ApiController]
     [Authorize]
-    public class MembershipsController : ODataController
+    public class MembershipsController : ODataController // Lăsăm OData să gestioneze rutele nativ
     {
         private readonly GymFitContext _context;
 
@@ -23,16 +22,16 @@ namespace GymFit.Controllers
             _context = context;
         }
 
-        // 1. CITEȘTE TOATE ABONAMENTELE (GET /odata/Memberships)
-        [HttpGet("odata/Memberships")]
+        // 1. CITEȘTE TOATE ABONAMENTELE (Nativ: GET /odata/Memberships)
+        [HttpGet]
         [EnableQuery]
         public IActionResult Get()
         {
             return Ok(_context.Memberships);
         }
 
-        // 2. CITEȘTE UN SINGUR ABONAMENT (GET /odata/Memberships(1))
-        [HttpGet("odata/Memberships({key})")]
+        // 2. CITEȘTE UN SINGUR ABONAMENT (Nativ: GET /odata/Memberships(1))
+        [HttpGet]
         [EnableQuery]
         public async Task<IActionResult> Get([FromODataUri] int key)
         {
@@ -44,8 +43,8 @@ namespace GymFit.Controllers
             return Ok(membership);
         }
 
-        // 3. ADĂUGARE ABONAMENT NOU (POST /odata/Memberships)
-        [HttpPost("odata/Memberships")]
+        // 3. ADĂUGARE ABONAMENT NOU (Nativ: POST /odata/Memberships)
+        [HttpPost]
         [Authorize(Roles = "Admin")]
         public IActionResult Post([FromBody] Membership membership)
         {
@@ -56,6 +55,9 @@ namespace GymFit.Controllers
 
             try
             {
+                // Resetăm ID-ul pentru a lăsa baza de date (PostgreSQL) să îl genereze automat
+                membership.Id = 0;
+
                 _context.Memberships.Add(membership);
                 _context.SaveChanges();
 
@@ -68,8 +70,8 @@ namespace GymFit.Controllers
             }
         }
 
-        // 4. ACTUALIZARE ABONAMENT (PUT /odata/Memberships(5))
-        [HttpPut("odata/Memberships({key})")]
+        // 4. ACTUALIZARE ABONAMENT (Nativ: PUT /odata/Memberships(5))
+        [HttpPut]
         [Authorize(Roles = "Admin")]
         public IActionResult Put([FromODataUri] int key, [FromBody] Membership updatedMembership)
         {
@@ -98,8 +100,8 @@ namespace GymFit.Controllers
             }
         }
 
-        // 5. ȘTERGERE ABONAMENT (DELETE /odata/Memberships(5))
-        [HttpDelete("odata/Memberships({key})")]
+        // 5. ȘTERGERE ABONAMENT (Nativ: DELETE /odata/Memberships(5))
+        [HttpDelete]
         [Authorize(Roles = "Admin")]
         public IActionResult Delete([FromODataUri] int key)
         {
@@ -118,7 +120,7 @@ namespace GymFit.Controllers
             }
         }
 
-        // 🎯 RUTE HYBRID CUSTOM (Rămân neschimbate ca să se pupe cu logica din React)
+        // 🎯 RUTE HYBRID CUSTOM (Rămân neschimbate cu adrese complete deoarece încep cu "api/")
         [HttpGet("api/Memberships/{id}/details")]
         public IActionResult GetMembershipDetails(int id)
         {

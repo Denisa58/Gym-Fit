@@ -1,5 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.OData.Query;
+using Microsoft.AspNetCore.OData.Routing.Controllers; // 🎯 Adăugat pentru ODataController
+using Microsoft.AspNetCore.OData.Formatter;         // 🎯 Adăugat pentru [FromODataUri]
 using Microsoft.AspNetCore.Authorization;
 using GymFit.models;
 using System;
@@ -9,10 +11,9 @@ using GymFit.Data;
 
 namespace GymFit.Controllers
 {
-    [Route("api/[controller]")]
-    [ApiController]
+    [ApiController] // Păstrăm stilul hibrid stabil
     [Authorize]
-    public class TrainersController : ControllerBase
+    public class TrainersController : ODataController // 🎯 Modificat: Moștenește din ODataController
     {
         private readonly GymFitContext _context;
 
@@ -21,34 +22,37 @@ namespace GymFit.Controllers
             _context = context;
         }
 
-        [HttpGet]
-        [EnableQuery] // 🎯 Permite OData să aplice automat filtrele ($filter, $select etc.) trimise din React
-        public IQueryable<Trainer> Get([FromQuery] int? companyId)
+        // 1. CITEȘTE TOȚI TRAINERII (GET /odata/Trainers)
+        [HttpGet("odata/Trainers")]
+        [EnableQuery]
+        public IActionResult Get([FromQuery] int? companyId)
         {
-            // 🎯 REPARAT ODATA: Returnăm IQueryable direct pentru ca structura JSON (.value) să fie predictibilă
             if (companyId.HasValue)
             {
-                return _context.Trainers.Where(t => t.CompanyId == companyId.Value);
+                var filtered = _context.Trainers.Where(t => t.CompanyId == companyId.Value);
+                return Ok(filtered);
             }
 
-            return _context.Trainers;
+            return Ok(_context.Trainers);
         }
 
-        // 🎯 RUTA INTRODUSĂ: Rezolvă eroarea 404 din React pentru api/Trainers/{id}
-        [HttpGet("{id}")]
-        public IActionResult GetById(int id)
+        // 2. CITEȘTE UN SINGUR TRAINER (GET /odata/Trainers(1))
+        [HttpGet("odata/Trainers({key})")]
+        [EnableQuery]
+        public IActionResult Get([FromODataUri] int key)
         {
-            var trainer = _context.Trainers.FirstOrDefault(t => t.Id == id);
+            var trainer = _context.Trainers.FirstOrDefault(t => t.Id == key);
 
             if (trainer == null)
             {
-                return NotFound($"Trainerul cu ID-ul {id} nu a fost găsit.");
+                return NotFound($"Trainerul cu ID-ul {key} nu a fost găsit.");
             }
 
             return Ok(trainer);
         }
 
-        [HttpGet("specialization/{spec}")]
+        // 3. FILTRARE DUPĂ SPECIALIZARE (Ruta custom: GET /odata/Trainers/specialization/{spec})
+        [HttpGet("odata/Trainers/specialization/{spec}")]
         public IActionResult GetBySpecialization(string spec)
         {
             if (string.IsNullOrEmpty(spec))
@@ -68,7 +72,8 @@ namespace GymFit.Controllers
             return Ok(filteredTrainers);
         }
 
-        [HttpPost]
+        // 4. ADĂUGARE TRAINER NOU (POST /odata/Trainers)
+        [HttpPost("odata/Trainers")]
         [Authorize(Roles = "Admin")]
         public IActionResult Post([FromBody] System.Text.Json.JsonElement body)
         {
@@ -81,8 +86,7 @@ namespace GymFit.Controllers
                 string phoneNumber = body.TryGetProperty("phoneNumber", out var phoneProp) ? phoneProp.GetString() : "";
                 string specialization = body.TryGetProperty("specialization", out var specProp) ? specProp.GetString() : "General";
 
-                // 🎯 EXTRAGEM COMPANY ID TRIMIS DIN REACT
-                int companyId = 1; // Valoare implicită de siguranță
+                int companyId = 1;
                 if (body.TryGetProperty("companyId", out var compProp))
                 {
                     if (compProp.ValueKind == System.Text.Json.JsonValueKind.Number)
@@ -95,7 +99,6 @@ namespace GymFit.Controllers
                     }
                 }
 
-                // Extragem anii trimiși din React
                 int experienceYears = 0;
                 if (body.TryGetProperty("yearsOfExperience", out var expProp))
                 {
@@ -124,6 +127,7 @@ namespace GymFit.Controllers
 
                 var trainer = new Trainer
                 {
+                    Id = 0, // Ne asigurăm că lăsăm baza de date să auto-incrementeze ID-ul
                     FirstName = firstName,
                     LastName = lastName,
                     Email = email,
@@ -138,7 +142,8 @@ namespace GymFit.Controllers
                 _context.Trainers.Add(trainer);
                 _context.SaveChanges();
 
-                return Ok(new { message = $"Trainerul {trainer.FirstName} {trainer.LastName} a fost adăugat cu succes!" });
+                // Folosim metoda nativă Created() din ODataController pentru un răspuns 201 standardizat
+                return Created(trainer);
             }
             catch (Exception ex)
             {

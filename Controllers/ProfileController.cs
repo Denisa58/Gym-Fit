@@ -13,7 +13,7 @@ namespace GymFit.Controllers
 {
     [ApiController]
     [Authorize]
-    public class ProfileController : ControllerBase // 🎯 Rămâne ControllerBase (recomandat pentru upload-uri non-OData)
+    public class ProfileController : ControllerBase 
     {
         private readonly GymFitContext _context;
         private readonly IWebHostEnvironment _environment;

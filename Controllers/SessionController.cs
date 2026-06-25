@@ -3,8 +3,8 @@ using GymFit.models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.OData.Query;
-using Microsoft.AspNetCore.OData.Routing.Controllers; // 🎯 Adăugat pentru ODataController
-using Microsoft.AspNetCore.OData.Formatter;         // 🎯 Adăugat pentru [FromODataUri]
+using Microsoft.AspNetCore.OData.Routing.Controllers;
+using Microsoft.AspNetCore.OData.Formatter;         
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
@@ -15,7 +15,7 @@ namespace GymFit.Controllers
 {
     [ApiController]
     [Authorize]
-    public class SessionsController : ODataController // 🎯 Modificat: Moștenește din ODataController
+    public class SessionsController : ODataController 
     {
         private readonly GymFitContext _context;
 

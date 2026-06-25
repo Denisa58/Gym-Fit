@@ -18,6 +18,7 @@ Log.Logger = new LoggerConfiguration()
     .WriteTo.Console()
     .WriteTo.File("logs/gymfit_log.txt", rollingInterval: RollingInterval.Day)
     .CreateLogger();
+
 builder.Host.UseSerilog();
 
 // 2. REPARARE CORS (Permite aplicației React să ceară date)
@@ -30,22 +31,38 @@ builder.Services.AddCors(options => {
     });
 });
 
-// 3. CONFIGURARE ODATA (Înregistrăm toate tabelele necesare)
 var modelBuilder = new ODataConventionModelBuilder();
-modelBuilder.EntitySet<Clients>("Clients");
-modelBuilder.EntitySet<Admin>("Admins");
-modelBuilder.EntitySet<Membership>("Memberships"); // Expusă tabela de abonamente
 
-// 🎯 REPARAT ACUM: Adăugăm tabelele lipsă pentru Săli și Sesiuni + Traineri
-// Astfel OData va ști cum să le serializeze și nu va mai genera crash-ul de runtime la MapControllers!
+// Înregistrăm setul de clienți și îi salvăm referința într-o variabilă
+var clientsEntity = modelBuilder.EntitySet<Clients>("Clients");
+
+// 🎯 REPARAT: Înregistrăm acțiunile personalizate în modelul OData 
+// pentru ca rutele din controller să fie recunoscute fără Warning la pornire!
+var chooseMembershipAction = clientsEntity.EntityType.Action("choose-membership");
+chooseMembershipAction.Returns<string>();
+
+var enrollAction = clientsEntity.EntityType.Action("enroll");
+enrollAction.Returns<string>();
+
+var uploadAction = clientsEntity.EntityType.Action("upload-profile-picture");
+uploadAction.Returns<string>();
+
+// Restul tabelelor tale expuse prin OData
+modelBuilder.EntitySet<Admin>("Admins");
+modelBuilder.EntitySet<Membership>("Memberships");
 modelBuilder.EntitySet<Room>("Rooms");
 modelBuilder.EntitySet<Session>("Sessions");
 modelBuilder.EntitySet<Trainer>("Trainers");
+
+// 🎯 FIX DEFINITIV: Adăugăm Workout în modelul EDM pentru OData ca să nu mai dea 404
+modelBuilder.EntitySet<Workout>("Workouts");
 
 builder.Services.AddControllers()
     .AddOData(options => options
         .Select().Filter().OrderBy().Expand().Count()
         .AddRouteComponents("odata", modelBuilder.GetEdmModel()));
+
+// =========================================================================
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();

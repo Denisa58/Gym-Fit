@@ -4,10 +4,14 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.OData.Query;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.OData.Routing.Controllers;
-using Microsoft.AspNetCore.OData.Formatter; // 👈 Adăugat pentru [FromODataUri]
+using Microsoft.AspNetCore.OData.Formatter; // Adăugat pentru [FromODataUri]
+using Microsoft.AspNetCore.Http; // 👈 Adăugat pentru IFormFile (upload de fișiere)
+using Microsoft.EntityFrameworkCore; // Adăugat pentru EntityState dacă e nevoie
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 
 namespace GymFit.Controllers
 {
@@ -37,7 +41,7 @@ namespace GymFit.Controllers
 
         // GET: odata/Clients(5)
         [HttpGet]
-        [EnableQuery] // 👈 Adăugat pentru a permite expand-uri pe un singur client dacă e nevoie
+        [EnableQuery] // Adăugat pentru a permite expand-uri pe un singur client dacă e nevoie
         [Authorize(Roles = "Admin,Trainer,Client")]
         public IActionResult Get([FromODataUri] int key) // 🎯 Modificat: Adăugat [FromODataUri] conform convenției OData
         {
@@ -111,10 +115,57 @@ namespace GymFit.Controllers
             return NotFound("Clientul nu a fost găsit sau este inactiv.");
         }
 
+        [HttpPost("odata/Clients({clientId})/upload-profile-picture")]
+        [Authorize]
+        public async Task<IActionResult> UploadProfilePicture([FromRoute] int clientId, IFormFile file)
+        {
+            if (file == null || file.Length == 0)
+            {
+                return BadRequest("Nu a fost trimis niciun fișier.");
+            }
+
+            var client = _context.Clients.FirstOrDefault(c => c.Id == clientId);
+            if (client == null)
+            {
+                return NotFound("Clientul nu a fost găsit.");
+            }
+
+            try
+            {
+                var uploadsFolder = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads");
+                if (!Directory.Exists(uploadsFolder))
+                {
+                    Directory.CreateDirectory(uploadsFolder);
+                }
+
+                var extension = Path.GetExtension(file.FileName);
+                var uniqueFileName = $"profile_{clientId}_{Guid.NewGuid()}{extension}";
+                var filePath = Path.Combine(uploadsFolder, uniqueFileName);
+
+                using (var stream = new FileStream(filePath, FileMode.Create))
+                {
+                    await file.CopyToAsync(stream);
+                }
+
+                var request = HttpContext.Request;
+                var baseUrl = $"{request.Scheme}://{request.Host}";
+                var imageUrl = $"{baseUrl}/uploads/{uniqueFileName}";
+
+                client.ProfilePictureUrl = imageUrl;
+                _context.SaveChanges();
+
+                return Ok(new { profilePictureUrl = imageUrl });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Eroare internă la salvarea imaginii: {ex.Message}");
+            }
+        }
+
         // DELETE: odata/Clients(5)
         [HttpDelete]
         [Authorize(Roles = "Admin")]
-        public IActionResult Delete([FromODataUri] int key) // 🎯 Modificat: Adăugat [FromODataUri] conform convenției OData
+        public IActionResult Delete([FromODataUri] int key) 
         {
             var client = _context.Clients.FirstOrDefault(c => c.Id == key);
             if (client != null)

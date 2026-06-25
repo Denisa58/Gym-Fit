@@ -1,6 +1,7 @@
 ﻿using GymFit.Data;
 using GymFit.models;
 using GymFit.services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -42,13 +43,13 @@ namespace GymFit.Controllers
             string fullName = "";
             string userRole = "";
             int currentCompanyId = 0;
-            string currentCompanyName = "";      // 🎯 Reține numele orașului
-            string currentCompanyLocation = "";  // 🎯 Reține adresa sediului
+            string currentCompanyName = "";
+            string currentCompanyLocation = "";
             DateTime? membershipActivatedAt = null;
 
-            // 1. CĂUTĂM ÎN TABELA DE CLIENȚI (Includem și Compania)
+            // 1. CĂUTĂM ÎN TABELA DE CLIENȚI
             var client = _context.Clients
-                .Include(u => u.Company) // 🎯 Include automat datele din tabela Companies
+                .Include(u => u.Company)
                 .FirstOrDefault(u => u.Email == loginData.Email);
 
             if (client != null)
@@ -75,11 +76,11 @@ namespace GymFit.Controllers
                 }
             }
 
-            // 2. CĂUTĂM ÎN TABELA DE ADMINI (Includem și Compania)
+            // 2. CĂUTĂM ÎN TABELA DE ADMINI
             if (string.IsNullOrEmpty(userId))
             {
                 var admin = _context.Admins
-                    .Include(a => a.Company) // 🎯 Include automat datele din tabela Companies
+                    .Include(a => a.Company)
                     .FirstOrDefault(a => a.Email == loginData.Email);
 
                 if (admin != null)
@@ -106,11 +107,11 @@ namespace GymFit.Controllers
                 }
             }
 
-            // 3. CĂUTĂM ÎN TABELA DE TRAINERI (Includem și Compania)
+            // 3. CĂUTĂM ÎN TABELA DE TRAINERI
             if (string.IsNullOrEmpty(userId))
             {
                 var trainer = _context.Trainers
-                    .Include(t => t.Company) // 🎯 Include automat datele din tabela Companies
+                    .Include(t => t.Company)
                     .FirstOrDefault(t => t.Email == loginData.Email);
 
                 if (trainer != null)
@@ -142,15 +143,14 @@ namespace GymFit.Controllers
                 return Unauthorized("Invalid credentials");
             }
 
-            // Adăugăm datele companiei în interiorul JWT token-ului criptat
             var claims = new[]
             {
                 new Claim(ClaimTypes.NameIdentifier, userId),
                 new Claim(ClaimTypes.Name, fullName),
                 new Claim(ClaimTypes.Role, userRole),
                 new Claim("companyId", currentCompanyId.ToString()),
-                new Claim("companyName", currentCompanyName),      // 🎯 Disponibil în token
-                new Claim("companyLocation", currentCompanyLocation) // 🎯 Disponibil în token
+                new Claim("companyName", currentCompanyName),
+                new Claim("companyLocation", currentCompanyLocation)
             };
 
             var secretKey = _configuration["Jwt:Key"];
@@ -170,7 +170,6 @@ namespace GymFit.Controllers
                 signingCredentials: creds
             );
 
-            // Returnăm și textul orașului ca proprietate în JSON pentru a fi citit imediat în React
             return Ok(new
             {
                 token = new JwtSecurityTokenHandler().WriteToken(token),
@@ -178,8 +177,8 @@ namespace GymFit.Controllers
                 name = fullName,
                 userId = userId,
                 companyId = currentCompanyId,
-                companyName = currentCompanyName,          // 🎯 TRIMIS CĂTRE REACT DIRECT!
-                companyLocation = currentCompanyLocation,  // 🎯 TRIMIS CĂTRE REACT DIRECT!
+                companyName = currentCompanyName,
+                companyLocation = currentCompanyLocation,
                 membershipActivatedAt = membershipActivatedAt
             });
         }
@@ -208,8 +207,6 @@ namespace GymFit.Controllers
                 PhoneNumber = registerData.PhoneNumber,
                 Password = hashedPassword,
                 Role = "Client",
-
-                // 📍 Pasul 2 completat: Mapăm dinamic ID-ul primit din formularul React
                 CompanyId = registerData.CompanyId
             };
 
@@ -225,21 +222,28 @@ namespace GymFit.Controllers
             }
         }
 
+        // 🛡️ REFACTORIZAT: Endpoint securizat, ia e-mailul utilizatorului logat din Token, nu din input!
         [HttpPost("forgot-password")]
-        public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordDto model)
+        [Authorize]
+        public async Task<IActionResult> ForgotPassword()
         {
-            if (model == null || string.IsNullOrEmpty(model.Email))
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userIdClaim))
             {
-                return BadRequest("Email-ul este obligatoriu.");
+                return Unauthorized("Utilizator neautorizat.");
             }
 
-            var client = _context.Clients.FirstOrDefault(c => c.Email == model.Email);
-            var trainer = _context.Trainers.FirstOrDefault(t => t.Email == model.Email);
+            int userId = int.Parse(userIdClaim);
+
+            var client = _context.Clients.FirstOrDefault(c => c.Id == userId);
+            var trainer = _context.Trainers.FirstOrDefault(t => t.Id == userId);
 
             if (client == null && trainer == null)
             {
-                return Ok(new { message = "Dacă email-ul există în sistem, un link de resetare a fost trimis." });
+                return BadRequest("Utilizatorul nu a fost găsit în sistem.");
             }
+
+            string userEmail = client != null ? client.Email : trainer.Email;
 
             string token = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
             DateTime expiryTime = DateTime.UtcNow.AddHours(1);
@@ -273,8 +277,8 @@ namespace GymFit.Controllers
 
             try
             {
-                await _emailService.SendEmailAsync(model.Email, "Resetare Parola - GymFit", emailBody);
-                return Ok(new { message = "Dacă email-ul există în sistem, un link de resetare a fost trimis." });
+                await _emailService.SendEmailAsync(userEmail, "Resetare Parola - GymFit", emailBody);
+                return Ok(new { message = "Un link securizat de resetare a fost trimis pe adresa ta de email oficială." });
             }
             catch (Exception ex)
             {
@@ -317,16 +321,71 @@ namespace GymFit.Controllers
 
             return Ok(new { message = "Parola a fost resetată cu succes! Acum te poți loga." });
         }
-    }
 
-    public class ForgotPasswordDto
-    {
-        public string Email { get; set; } = string.Empty;
+        [HttpPost("change-password")]
+        [Authorize]
+        public IActionResult ChangePassword([FromBody] ChangePasswordDto model)
+        {
+            if (model == null || string.IsNullOrEmpty(model.CurrentPassword) || string.IsNullOrEmpty(model.NewPassword))
+            {
+                return BadRequest("Toate câmpurile sunt obligatorii.");
+            }
+
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userIdClaim))
+            {
+                return Unauthorized("Utilizator neautorizat.");
+            }
+
+            int userId = int.Parse(userIdClaim);
+
+            var client = _context.Clients.FirstOrDefault(c => c.Id == userId);
+            var trainer = _context.Trainers.FirstOrDefault(t => t.Id == userId);
+            var admin = _context.Admins.FirstOrDefault(a => a.Id == userId);
+
+            string currentStoredPassword = "";
+
+            if (client != null) currentStoredPassword = client.Password;
+            else if (trainer != null) currentStoredPassword = trainer.Password;
+            else if (admin != null) currentStoredPassword = admin.Password;
+            else return BadRequest("Utilizatorul nu a fost găsit.");
+
+            bool isOldPasswordValid = false;
+            try
+            {
+                isOldPasswordValid = BCrypt.Net.BCrypt.Verify(model.CurrentPassword, currentStoredPassword);
+            }
+            catch
+            {
+                isOldPasswordValid = (currentStoredPassword == model.CurrentPassword);
+            }
+
+            if (!isOldPasswordValid)
+            {
+                return BadRequest("Parola curentă este incorectă.");
+            }
+
+            string newHashedPassword = BCrypt.Net.BCrypt.HashPassword(model.NewPassword);
+
+            if (client != null) client.Password = newHashedPassword;
+            else if (trainer != null) trainer.Password = newHashedPassword;
+            else if (admin != null) admin.Password = newHashedPassword;
+
+            _context.SaveChanges();
+
+            return Ok(new { message = "Parola a fost schimbată cu succes!" });
+        }
     }
 
     public class ResetPasswordDto
     {
         public string Token { get; set; } = string.Empty;
+        public string NewPassword { get; set; } = string.Empty;
+    }
+
+    public class ChangePasswordDto
+    {
+        public string CurrentPassword { get; set; } = string.Empty;
         public string NewPassword { get; set; } = string.Empty;
     }
 }
