@@ -1,4 +1,3 @@
-// src/components/ResetPassword.tsx
 /// <reference types="react" />
 import React from 'react';
 import { useLocation, useHistory } from 'react-router-dom';
@@ -7,11 +6,9 @@ const ResetPassword = () => {
     const history = useHistory();
     const query = new URLSearchParams(useLocation().search);
 
-    // Extragem token-ul și email-ul din link-ul trimis pe mail
+    // 🎯 REPARAT: Extragem doar token-ul. Email-ul nu mai este trimis în link pentru securitate sporită
     const token = query.get('token');
-    const email = query.get('email');
 
-    // Folosim structura stabilă React.useState
     const [password, setPassword] = React.useState('');
     const [confirmPassword, setConfirmPassword] = React.useState('');
     const [message, setMessage] = React.useState('');
@@ -36,12 +33,11 @@ const ResetPassword = () => {
         setLoading(true);
 
         try {
-            // Trimitem datele către endpoint-ul de backend
+            // 🎯 REPARAT: Trimitem exact structura cerută de ResetPasswordDto din backend
             const response = await fetch('https://localhost:7104/api/Auth/reset-password', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    email: email,
                     token: token,
                     newPassword: password
                 })

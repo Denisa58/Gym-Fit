@@ -5,6 +5,7 @@ import SessionCard from './SessionCard';
 
 const ClientDashboard = ({
                              userName = 'User',
+                             profileImageUrl, // Primim direct URL-ul corect de la părinte
                              membershipActivatedAt,
                              daysLeft,
                              membershipName,
@@ -20,27 +21,49 @@ const ClientDashboard = ({
                              history
                          }: any) => {
 
-    const currentUserId = localStorage.getItem('userId') || localStorage.getItem('id') || localStorage.getItem('userIdCurent') || '1';
-
-    const savedPic = localStorage.getItem(`profilePic_${currentUserId}`);
-    const activeProfileImageUrl = savedPic
-        ? (savedPic.startsWith('data:') ? savedPic : `https://localhost:7104${savedPic}`)
-        : null;
-
     const SessionCardAny = SessionCard as any;
 
     return (
         <div>
-            <div className="client-welcome-row">
+            <div className="client-welcome-row" style={{ display: 'flex', justifyContent: 'between', alignItems: 'center' }}>
                 <div>
                     <p className="welcome-label">Welcome</p>
                     <h1 className="welcome-heading">{userName}! 👋</h1>
                 </div>
-                <div onClick={() => history.push('/profile')} className="dashboard-profile-avatar" style={{ cursor: 'pointer' }}>
-                    {activeProfileImageUrl ? (
-                        <img src={activeProfileImageUrl} alt="Dashboard Profile" className="navbar-avatar-image"/>
+
+                {/* 🌟 REPARAT COMPLET: Avatar rotund, curat, fără suprapuneri de text */}
+                <div
+                    onClick={() => history.push('/profile')}
+                    className="dashboard-profile-avatar"
+                    style={{
+                        cursor: 'pointer',
+                        width: '75px',
+                        height: '75px',
+                        borderRadius: '50%',
+                        border: '3px solid #ccff00',
+                        boxShadow: '0 0 15px rgba(204, 255, 0, 0.4)',
+                        overflow: 'hidden',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        backgroundColor: '#1a1a1a',
+                        flexShrink: 0
+                    }}
+                >
+                    {profileImageUrl ? (
+                        <img
+                            src={profileImageUrl}
+                            alt="Dashboard Profile"
+                            style={{
+                                width: '100%',
+                                height: '100%',
+                                objectFit: 'cover'
+                            }}
+                        />
                     ) : (
-                        <span className="navbar-avatar-fallback">{(userName || 'U').charAt(0).toUpperCase()}</span>
+                        <span style={{ color: '#ccff00', fontSize: '24px', fontWeight: 'bold' }}>
+                            {(userName || 'U').charAt(0).toUpperCase()}
+                        </span>
                     )}
                 </div>
             </div>

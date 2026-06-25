@@ -37,14 +37,20 @@ const MembershipsTab = () => {
         e.preventDefault();
         try {
             const token = localStorage.getItem('userToken');
+
+            // 🎯 REPARAT: Mapăm câmpurile în format PascalCase pentru a se potrivi exact cu modelul OData din C#
             const payload = {
-                ...form,
-                price: parseFloat(form.price),
-                durationMonths: parseInt(form.durationMonths, 10),
-                maxWorkoutsPerWeek: parseInt(form.maxWorkoutsPerWeek, 10)
+                Id: 0, // Adăugat explicit pentru convenția OData
+                Name: form.name,
+                Price: parseFloat(form.price),
+                DurationMonths: parseInt(form.durationMonths as any, 10),
+                Description: form.description,
+                HasPoolAccess: form.hasPoolAccess,
+                HasSaunaAccess: form.hasSaunaAccess,
+                HasTrainerIncluded: form.hasTrainerIncluded,
+                MaxWorkoutsPerWeek: parseInt(form.maxWorkoutsPerWeek as any, 10)
             };
 
-            // 🎯 MODIFICAT: Rută OData Nativă (odata/Memberships) în loc de api/Memberships
             const res = await fetch("https://localhost:7104/odata/Memberships", {
                 method: "POST",
                 headers: {
@@ -68,13 +74,14 @@ const MembershipsTab = () => {
                 });
                 loadMemberships();
             } else {
-                alert("Error creating membership.");
+                // Încercăm să prindem eroarea exactă de la server pentru a o vedea în alert dacă mai e cazul
+                const errText = await res.text();
+                alert(`Error creating membership: ${errText || res.statusText}`);
             }
         } catch (err: any) {
             alert(err.message);
         }
     };
-
     const handleDelete = async (id: any) => {
         if (!window.confirm("Are you sure you want to delete this membership plan?")) return;
         try {

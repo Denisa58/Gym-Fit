@@ -48,9 +48,7 @@ const MembershipCards = ({ membershipName }: MembershipCardsProps) => {
             return;
         }
 
-        if (!window.confirm(`Are you sure you want to purchase the "${planName}" plan?`)) {
-            return;
-        }
+
 
         try {
             const response = await fetch(`https://localhost:7104/api/Memberships/purchase`, {
@@ -67,7 +65,7 @@ const MembershipCards = ({ membershipName }: MembershipCardsProps) => {
             });
 
             if (response.ok) {
-                alert(`🎉 Successfully purchased ${planName}! It is now active in your profile.`);
+               // alert(`🎉 Successfully purchased ${planName}! It is now active in your profile.`);
 
                 localStorage.setItem(`membershipActivatedAt_${userId}`, new Date().toISOString());
                 localStorage.setItem(`membershipName_${userId}`, planName);

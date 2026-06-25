@@ -1,6 +1,6 @@
 import { Trainers } from '../models/Trainers';
 
-const API_URL = 'https://localhost:7104/api/trainers';
+const API_URL = 'https://localhost:7104/odata/Trainers';
 
 export const trainerService = {
     getAllTrainers: async (): Promise<Trainers[]> => {

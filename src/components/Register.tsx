@@ -1,4 +1,3 @@
-// src/components/Register.tsx
 /// <reference types="react" />
 import React from 'react';
 import { authService } from '../services/authService';
@@ -6,7 +5,6 @@ import { useHistory } from 'react-router-dom';
 import './Register.css';
 
 const Register = () => {
-    // 📍 Pasul 3.1: Inițializăm companyId în starea formularului (implicit sediul 1)
     const [formData, setFormData] = React.useState({
         firstName: '',
         lastName: '',
@@ -35,18 +33,15 @@ const Register = () => {
         setSuccess('');
         setLoading(true);
 
-        // 📍 Pasul 3.2: Mapăm și convertim companyId în format numeric (int) pentru backend
         const payload = {
             ...formData,
             companyId: parseInt(formData.companyId, 10) || 1
         };
 
         try {
-            // Trimitem payload-ul corectat numeric către serviciul de autentificare
             await authService.register(payload);
             setSuccess('Account created successfully! Redirecting to login...');
 
-            // După 2 secunde de succes, îl trimitem automat la Login
             setTimeout(() => {
                 history.push('/login');
             }, 2000);
@@ -72,7 +67,8 @@ const Register = () => {
                 {error && <div className="register-error">{error}</div>}
                 {success && <div className="register-success">{success}</div>}
 
-                <form onSubmit={handleRegister}>
+                {/* 🎯 TRUC: Am adăugat autoComplete="new-password" direct pe form pentru a bloca comportamentul nativ */}
+                <form onSubmit={handleRegister} autoComplete="new-password">
                     <div className="form-row">
                         <div className="form-group">
                             <label>First Name</label>
@@ -84,6 +80,7 @@ const Register = () => {
                                 onChange={handleChange}
                                 placeholder="John"
                                 required
+                                autoComplete="none"
                             />
                         </div>
 
@@ -97,6 +94,7 @@ const Register = () => {
                                 onChange={handleChange}
                                 placeholder="Doe"
                                 required
+                                autoComplete="none"
                             />
                         </div>
                     </div>
@@ -104,13 +102,14 @@ const Register = () => {
                     <div className="form-group">
                         <label>Email Address</label>
                         <input
-                            type="email"
+                            type="text" // 🎯 TRUC: Schimbat din "email" în "text" ca browserul să nu-l mai vâneze pentru auto-fill
                             name="email"
                             className="form-input"
                             value={formData.email}
                             onChange={handleChange}
                             placeholder="john.doe@example.com"
                             required
+                            autoComplete="none"
                         />
                     </div>
 
@@ -124,10 +123,10 @@ const Register = () => {
                             onChange={handleChange}
                             placeholder="0712345678"
                             required
+                            autoComplete="none"
                         />
                     </div>
 
-                    {/* 📍 Pasul 3.3: Inserăm Dropdown-ul pentru selectarea Sediului/Orașului */}
                     <div className="form-group">
                         <label>Select Gym Location</label>
                         <select
@@ -147,13 +146,15 @@ const Register = () => {
                     <div className="form-group">
                         <label>Password</label>
                         <input
-                            type="password"
+                            type="text" // 🎯 TRUC: Schimbat în tip text + proprietăți de securitate vizuală
                             name="password"
                             className="form-input"
                             value={formData.password}
                             onChange={handleChange}
                             placeholder="••••••••"
                             required
+                            autoComplete="new-password"
+                            style={{ WebkitTextSecurity: 'disc', MozTextSecurity: 'disc' }}
                         />
                     </div>
 
@@ -163,7 +164,7 @@ const Register = () => {
                 </form>
 
                 <p className="login-redirect">
-                    Already have an account?
+                    Already have an account?{' '}
                     <span className="login-link" onClick={() => history.push('/login')}>
                         Login
                     </span>

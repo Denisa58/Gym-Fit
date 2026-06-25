@@ -20,13 +20,15 @@ import './Home.css';
 const Home = () => {
     const history = useHistory();
 
+    // 🌟 REPARAT: Definim token-ul la începutul componentei pentru a fi vizibil în toate funcțiile asincrone
+    const token = localStorage.getItem('token') || localStorage.getItem('userToken');
+
     // 🎯 Preluare Rol și ID din Storage
     const role = localStorage.getItem('role') || localStorage.getItem('userRole') || 'Client';
     const userId = localStorage.getItem('userId') || localStorage.getItem('id') || localStorage.getItem('userIdCurent') || '1';
 
     // 🎯 Extragere inițială Nume Utilizator din Token
     const [userName, setUserName] = React.useState(() => {
-        const token = localStorage.getItem('token') || localStorage.getItem('userToken');
         if (token) {
             try {
                 const base64Url = token.split('.')[1];
@@ -82,10 +84,10 @@ const Home = () => {
         return savedDate ? new Date(savedDate) : null;
     });
 
-    const savedProfilePic = localStorage.getItem(`profilePic_${userId}`);
-    const profileImageUrl = savedProfilePic
-        ? (savedProfilePic.startsWith('data:') ? savedProfilePic : `https://localhost:7104${savedProfilePic}`)
-        : null;
+    // 🌟 RECOMANDAT: Gestionăm starea dinamică a pozei de profil local
+    const [profilePic, setProfilePic] = React.useState<string | null>(() => {
+        return localStorage.getItem(`profilePic_${userId}`) || null;
+    });
 
     React.useEffect(() => {
         if (history.location.state && (history.location.state as any).targetTab) {
@@ -106,51 +108,69 @@ const Home = () => {
 
     const loadInitialData = async () => {
         try {
-            const token = localStorage.getItem('token') || localStorage.getItem('userToken');
+            const rawCompanyId = localStorage.getItem('companyId') || storedCompanyId;
+            const currentCompanyId = rawCompanyId ? parseInt(rawCompanyId.toString(), 10) : null;
+
             const headersConfig = {
                 'Content-Type': 'application/json',
                 'Authorization': token ? `Bearer ${token}` : ''
             };
 
-            // 1. Încărcare Săli
-            const rResponse = await fetch(`https://localhost:7104/odata/Rooms?companyId=${storedCompanyId}`, { headers: headersConfig });
+            // 1. Încărcare Săli (Rooms)
+            const roomsUrl = currentCompanyId
+                ? `https://localhost:7104/odata/Rooms?$filter=CompanyId eq ${currentCompanyId}`
+                : `https://localhost:7104/odata/Rooms`;
+
+            const rResponse = await fetch(roomsUrl, { headers: headersConfig });
             if (rResponse.ok) {
                 const rData = await rResponse.json();
                 const rawRooms = rData.value || rData || [];
                 setRooms(rawRooms.map((r: any) => ({
                     ...r,
                     id: r.Id ?? r.id,
+                    Id: r.Id ?? r.id,
                     name: r.Name ?? r.name,
+                    Name: r.Name ?? r.name,
                     maxCapacity: r.MaxCapacity ?? r.maxCapacity,
                     equipmentType: r.EquipmentType ?? r.equipmentType,
                     isAvailable: r.IsAvailable ?? r.isAvailable
                 })));
             }
 
-            // 2. Încărcare Tipuri de Antrenament (Workouts)
-            const wResponse = await fetch(`https://localhost:7104/api/Workouts?companyId=${storedCompanyId}`, { headers: headersConfig });
+            // 2. 🎯 MODIFICAT: Încărcare Tipuri de Antrenament (Workouts) adaptată complet pentru noul ODataController
+            const workoutsUrl: string = currentCompanyId
+                ? `https://localhost:7104/odata/Workouts?$filter=CompanyId eq ${currentCompanyId}`
+                : `https://localhost:7104/odata/Workouts`;
+
+            const wResponse = await fetch(workoutsUrl, { headers: headersConfig });
             if (wResponse.ok) {
                 const wData = await wResponse.json();
                 const rawWorkouts = wData.value || wData || [];
                 setWorkouts(rawWorkouts.map((w: any) => ({
                     ...w,
-                    id: w.id ?? w.Id,
-                    name: w.name ?? w.Name,
-                    description: w.description ?? w.Description,
-                    difficultyLevel: w.difficultyLevel ?? w.DifficultyLevel,
-                    estimatedDuration: w.estimatedDuration ?? w.EstimatedDuration,
-                    averageCaloriesBurned: w.averageCaloriesBurned ?? w.AverageCaloriesBurned
+                    id: w.Id ?? w.id,
+                    Id: w.Id ?? w.id,
+                    name: w.Name ?? w.name,
+                    Name: w.Name ?? w.name,
+                    description: w.Description ?? w.description,
+                    difficultyLevel: w.DifficultyLevel ?? w.difficultyLevel,
+                    estimatedDuration: w.EstimatedDuration ?? w.estimatedDuration,
+                    averageCaloriesBurned: w.AverageCaloriesBurned ?? w.averageCaloriesBurned
                 })));
             }
 
             // 3. Încărcare Sesiuni brute prin OData
-            const sResponse = await fetch(`https://localhost:7104/odata/Sessions?companyId=${storedCompanyId}&$expand=EnrolledClients`, { headers: headersConfig });
+            const sessionsUrl = currentCompanyId
+                ? `https://localhost:7104/odata/Sessions?$filter=CompanyId eq ${currentCompanyId}&$expand=EnrolledClients`
+                : `https://localhost:7104/odata/Sessions?$expand=EnrolledClients`;
+
+            const sResponse = await fetch(sessionsUrl, { headers: headersConfig });
             if (sResponse.ok) {
                 const sData = await sResponse.json();
                 setSessions(sData.value || sData || []);
             }
 
-            // 4. Preluare date Client prin OData + CALCUL DINAMIC EXACT DIN BACKEND
+            // 4. 🛡️ FIXAT: Garda de securitate împotriva erorilor 404 pentru Admin/Trainer
             if (role === 'Client' && userId && userId !== 'undefined' && userId !== 'null') {
                 try {
                     const userResponse = await fetch(`https://localhost:7104/odata/Clients(${userId})`, { method: 'GET', headers: headersConfig });
@@ -168,6 +188,12 @@ const Home = () => {
                                 setUserName(fullDbName);
                             }
 
+                            const dbProfilePic = userData.profilePictureUrl || userData.ProfilePictureUrl;
+                            if (dbProfilePic) {
+                                setProfilePic(dbProfilePic);
+                                localStorage.setItem(`profilePic_${userId}`, dbProfilePic);
+                            }
+
                             const rawMembershipId = userData.membershipId || userData.MembershipId;
                             const dbActivatedAt = userData.membershipActivatedAt || userData.MembershipActivatedAt;
 
@@ -180,20 +206,16 @@ const Home = () => {
                                 const activeDate = new Date(dbActivatedAt);
                                 setMembershipActivatedAt(activeDate);
 
-                                let durationMonths = 1; // Valoare implicită de siguranță (1 lună)
+                                let durationMonths = 1;
                                 let currentFetchedName = "Active Membership";
 
                                 try {
                                     const mResponse = await fetch(`https://localhost:7104/odata/Memberships(${parsedId})`, { headers: headersConfig });
                                     if (mResponse.ok) {
                                         const mData = await mResponse.json();
-
-                                        console.log(`=== DETALII MEMBERSHIP DIN DB PENTRU ID ${parsedId} ===`, mData);
-
                                         currentFetchedName = mData.name || mData.Name || "Active Membership";
                                         setMembershipName(currentFetchedName);
 
-                                        // 🌟 FIXAT: Citim exact proprietatea DurationMonths din baza ta de date!
                                         const foundDuration = mData.DurationMonths ?? mData.durationMonths ??
                                             mData.PeriodMonths ?? mData.periodMonths;
 
@@ -205,14 +227,12 @@ const Home = () => {
                                     console.error("Eroare la preluarea detaliilor abonamentului:", errMembership);
                                 }
 
-                                // 🎯 CALCUL MATEMATIC CURAT FĂRĂ SUPRASCRIERI MANUALE
                                 const expiryDate = new Date(activeDate.getTime());
                                 expiryDate.setMonth(expiryDate.getMonth() + durationMonths);
 
                                 const diffTime = expiryDate.getTime() - new Date().getTime();
                                 const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-                                console.log(`[SUCCES] Client: ${dbFirstName} | Plan: ${currentFetchedName} | Durată reală DB: ${durationMonths} luni | Zile rămase: ${diffDays}`);
                                 setDaysLeft(diffDays > 0 ? diffDays : 0);
                             }
                         }
@@ -220,22 +240,30 @@ const Home = () => {
                 } catch (errUser) {
                     console.error("Eroare la procesarea profilului prin OData API:", errUser);
                 }
+            } else {
+                const storedName = localStorage.getItem('userName') || (role === 'Admin' ? 'Administrator' : 'Trainer');
+                setUserName(storedName);
             }
+
             // 5. Încărcare Antrenori
+            const trainersUrl = currentCompanyId
+                ? `https://localhost:7104/odata/Trainers?$filter=CompanyId eq ${currentCompanyId}`
+                : `https://localhost:7104/odata/Trainers`;
             try {
-                const tResponse = await fetch(`https://localhost:7104/api/Trainers?companyId=${storedCompanyId}`, {
-                    method: 'GET',
-                    headers: headersConfig
-                });
+                const tResponse = await fetch(trainersUrl, { method: 'GET', headers: headersConfig });
                 if (tResponse.ok) {
                     const tData = await tResponse.json();
-                    const rawTrainers = tData.value || tData || [];
+
+                    // 🎯 REPARAT: Extragere strictă a array-ului din OData pentru a evita crash-ul la .map()
+                    const rawTrainers = tData.value || tData.$values || (Array.isArray(tData) ? tData : []);
 
                     setTrainers(rawTrainers.map((t: any) => ({
                         ...t,
                         id: t.id ?? t.Id,
+                        Id: t.id ?? t.Id,
                         firstName: t.firstName ?? t.FirstName,
                         lastName: t.lastName ?? t.LastName,
+                        Name: `${t.firstName ?? t.FirstName} ${t.lastName ?? t.LastName}`.trim(),
                         email: t.email ?? t.Email,
                         phoneNumber: t.phoneNumber ?? t.PhoneNumber,
                         specialization: t.specialization ?? t.Specialization,
@@ -303,7 +331,8 @@ const Home = () => {
                 companyId: companyIdInt
             };
 
-            const response = await fetch('https://localhost:7104/api/Workouts', {
+            // 🎯 MODIFICAT: Apelăm ruta corectă /odata/Workouts în loc de /api/Workouts
+            const response = await fetch('https://localhost:7104/odata/Workouts', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -397,7 +426,7 @@ const Home = () => {
             });
 
             if (response.ok) {
-                alert("🎯 You have successfully booked this class!");
+                //alert("🎯 You have successfully booked this class!");
                 setTimeout(async () => { await loadInitialData(); }, 300);
             } else {
                 alert(`Booking failed: ${await response.text()}`);
@@ -443,21 +472,14 @@ const Home = () => {
                 let startTimeRaw = s.StartTime ?? s.startTime;
                 if (!startTimeRaw) return false;
 
-                let sessionDate = new Date(startTimeRaw);
+                // Transformăm ambele date în milisecunde UTC pentru o comparație perfectă independentă de fusul orar
+                const sessionTimeMs = new Date(startTimeRaw).getTime();
+                const currentTimeMs = new Date(currentTime).getTime();
 
-                if (typeof startTimeRaw === 'string' && !startTimeRaw.endsWith('Z') && !startTimeRaw.includes('+')) {
-                    sessionDate = new Date(startTimeRaw + 'Z');
-                }
+                if (isNaN(sessionTimeMs)) return false;
 
-                if (isNaN(sessionDate.getTime())) return false;
-
-                const currentWorkoutId = s.WorkoutId ?? s.workoutId;
-                const matchedWorkout = workouts.find((w: any) => (w.id ?? w.Id) === currentWorkoutId);
-                const durationMinutes = matchedWorkout?.estimatedDuration ?? matchedWorkout?.EstimatedDuration ?? 50;
-
-                const sessionEndDate = new Date(sessionDate.getTime() + durationMinutes * 60000);
-
-                return sessionEndDate >= currentTime;
+                // 🎯 MODIFICAT: Sesiunea dispare IMEDIAT ce ora curentă a ajuns sau a depășit ora de începere
+                return sessionTimeMs > currentTimeMs;
             })
             .sort((a: any, b: any) => {
                 const timeA = new Date(a.StartTime || a.startTime).getTime() || 0;
@@ -509,7 +531,9 @@ const Home = () => {
         };
     };
 
-    const token = localStorage.getItem('token') || localStorage.getItem('userToken');
+    const profileImageUrl = profilePic
+        ? (profilePic.startsWith('data:') || profilePic.startsWith('http') ? profilePic : `https://localhost:7104${profilePic}`)
+        : null;
 
     return (
         <div className="home-page-wrapper">
@@ -524,7 +548,7 @@ const Home = () => {
                     {role === 'Admin' && (
                         <>
                             <button onClick={() => setActiveTab('rooms')} style={getTopNavBtnStyle('rooms')}>Rooms</button>
-                            <button onClick={() => setActiveTab('add-trainer')} style={getTopNavBtnStyle('add-trainer')}>New Trainer</button>
+                            <button onClick={() => setActiveTab('add-trainer')} style={getTopNavBtnStyle('add-trainer')}>Create Staff Account</button>
                             <button onClick={() => setActiveTab('manage-memberships')} style={getTopNavBtnStyle('manage-memberships')}>Manage Memberships</button>
                         </>
                     )}
@@ -554,7 +578,7 @@ const Home = () => {
                         />
                     ) : (
                         <AdminTrainerDashboard
-                            userName={userName} setActiveTab={setActiveTab} history={history}
+                            userName={userName} profileImageUrl={profileImageUrl} setActiveTab={setActiveTab} history={history}
                             getActiveAndUpcomingSessions={getActiveAndUpcomingSessions} workouts={workouts} rooms={rooms}
                             role={role} handleEnrollSession={handleEnrollSession} getTrainerNameById={getTrainerNameById}
                             renderEnrolledClientsList={renderEnrolledClientsList}
