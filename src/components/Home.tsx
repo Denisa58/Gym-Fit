@@ -59,8 +59,9 @@ const Home = () => {
         return 'dashboard';
     });
 
-    // 🎯 Pornim direct cu starea că nu există abonament activ pentru a evita blocarea butonului de Buy
+    // 🎯 Stări pentru Gestiune Abonamente
     const [membershipName, setMembershipName] = React.useState('No Active Membership');
+    const [daysLeft, setDaysLeft] = React.useState<number>(0);
 
     const [rooms, setRooms] = React.useState([]);
     const [workouts, setWorkouts] = React.useState([]);
@@ -76,7 +77,7 @@ const Home = () => {
         name: '', description: '', difficultyLevel: 'Beginner', estimatedDuration: 50, averageCaloriesBurned: 400
     });
 
-    const [membershipActivatedAt, setMembershipActivatedAt] = React.useState(() => {
+    const [membershipActivatedAt, setMembershipActivatedAt] = React.useState<Date | null>(() => {
         const savedDate = localStorage.getItem(`membershipActivatedAt_${userId}`);
         return savedDate ? new Date(savedDate) : null;
     });
@@ -85,15 +86,6 @@ const Home = () => {
     const profileImageUrl = savedProfilePic
         ? (savedProfilePic.startsWith('data:') ? savedProfilePic : `https://localhost:7104${savedProfilePic}`)
         : null;
-
-    const getDaysLeft = () => {
-        if (!membershipActivatedAt) return 0;
-        const expiryDate = new Date(membershipActivatedAt);
-        expiryDate.setDate(expiryDate.getDate() + 30);
-        const diffTime = expiryDate.getTime() - currentTime.getTime();
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        return diffDays > 0 ? diffDays : 0;
-    };
 
     React.useEffect(() => {
         if (history.location.state && (history.location.state as any).targetTab) {
@@ -135,7 +127,7 @@ const Home = () => {
                 })));
             }
 
-            // 2. Încărcare Tipuri de Antrenament (Workouts) + Aliniere IQueryable OData
+            // 2. Încărcare Tipuri de Antrenament (Workouts)
             const wResponse = await fetch(`https://localhost:7104/api/Workouts?companyId=${storedCompanyId}`, { headers: headersConfig });
             if (wResponse.ok) {
                 const wData = await wResponse.json();
@@ -158,67 +150,78 @@ const Home = () => {
                 setSessions(sData.value || sData || []);
             }
 
-            // 4. Preluare date Client prin OData
+            // 4. Preluare date Client prin OData + CALCUL DINAMIC EXACT DIN BACKEND
             if (role === 'Client' && userId && userId !== 'undefined' && userId !== 'null') {
                 try {
-                    let userResponse = null;
-                    let userData = null;
-
-                    userResponse = await fetch(`https://localhost:7104/odata/Clients(${userId})`, { method: 'GET', headers: headersConfig });
+                    const userResponse = await fetch(`https://localhost:7104/odata/Clients(${userId})`, { method: 'GET', headers: headersConfig });
 
                     if (userResponse.ok) {
                         const result = await userResponse.json();
-                        userData = result.value ? (Array.isArray(result.value) ? result.value[0] : result.value) : result;
-                    }
+                        const userData = result.value ? (Array.isArray(result.value) ? result.value[0] : result.value) : result;
 
-                    if (userData) {
-                        const dbFirstName = userData.firstName || userData.FirstName;
-                        const dbLastName = userData.lastName || userData.LastName;
-                        if (dbFirstName) {
-                            const fullDbName = `${dbFirstName} ${dbLastName || ''}`.trim();
-                            localStorage.setItem('userName', fullDbName);
-                            setUserName(fullDbName);
-                        }
-
-                        const rawMembershipId = userData.membershipId || userData.MembershipId;
-
-                        if (!rawMembershipId || rawMembershipId === 0) {
-                            setMembershipName("No Active Membership");
-                            localStorage.removeItem(`membershipId_${userId}`);
-                            setMembershipActivatedAt(null);
-                        } else {
-                            try {
-                                const mResponse = await fetch(`https://localhost:7104/odata/Memberships(${rawMembershipId})`, { headers: headersConfig });
-                                if (mResponse.ok) {
-                                    const mData = await mResponse.json();
-                                    setMembershipName(mData.name || mData.Name || "No Active Membership");
-                                } else {
-                                    processMembershipFallback(rawMembershipId);
-                                }
-                            } catch (errMembership) {
-                                processMembershipFallback(rawMembershipId);
+                        if (userData) {
+                            const dbFirstName = userData.firstName || userData.FirstName;
+                            const dbLastName = userData.lastName || userData.LastName;
+                            if (dbFirstName) {
+                                const fullDbName = `${dbFirstName} ${dbLastName || ''}`.trim();
+                                localStorage.setItem('userName', fullDbName);
+                                setUserName(fullDbName);
                             }
 
+                            const rawMembershipId = userData.membershipId || userData.MembershipId;
                             const dbActivatedAt = userData.membershipActivatedAt || userData.MembershipActivatedAt;
-                            if (dbActivatedAt) {
-                                localStorage.setItem(`membershipActivatedAt_${userId}`, dbActivatedAt);
-                                setMembershipActivatedAt(new Date(dbActivatedAt));
+
+                            if (!rawMembershipId || rawMembershipId === 0 || !dbActivatedAt) {
+                                setMembershipName("No Active Membership");
+                                setDaysLeft(0);
+                                setMembershipActivatedAt(null);
+                            } else {
+                                const parsedId = parseInt(rawMembershipId, 10);
+                                const activeDate = new Date(dbActivatedAt);
+                                setMembershipActivatedAt(activeDate);
+
+                                let durationMonths = 1; // Valoare implicită de siguranță (1 lună)
+                                let currentFetchedName = "Active Membership";
+
+                                try {
+                                    const mResponse = await fetch(`https://localhost:7104/odata/Memberships(${parsedId})`, { headers: headersConfig });
+                                    if (mResponse.ok) {
+                                        const mData = await mResponse.json();
+
+                                        console.log(`=== DETALII MEMBERSHIP DIN DB PENTRU ID ${parsedId} ===`, mData);
+
+                                        currentFetchedName = mData.name || mData.Name || "Active Membership";
+                                        setMembershipName(currentFetchedName);
+
+                                        // 🌟 FIXAT: Citim exact proprietatea DurationMonths din baza ta de date!
+                                        const foundDuration = mData.DurationMonths ?? mData.durationMonths ??
+                                            mData.PeriodMonths ?? mData.periodMonths;
+
+                                        if (foundDuration !== undefined && foundDuration !== null) {
+                                            durationMonths = parseInt(foundDuration, 10);
+                                        }
+                                    }
+                                } catch (errMembership) {
+                                    console.error("Eroare la preluarea detaliilor abonamentului:", errMembership);
+                                }
+
+                                // 🎯 CALCUL MATEMATIC CURAT FĂRĂ SUPRASCRIERI MANUALE
+                                const expiryDate = new Date(activeDate.getTime());
+                                expiryDate.setMonth(expiryDate.getMonth() + durationMonths);
+
+                                const diffTime = expiryDate.getTime() - new Date().getTime();
+                                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+                                console.log(`[SUCCES] Client: ${dbFirstName} | Plan: ${currentFetchedName} | Durată reală DB: ${durationMonths} luni | Zile rămase: ${diffDays}`);
+                                setDaysLeft(diffDays > 0 ? diffDays : 0);
                             }
                         }
-                    } else {
-                        executeFinalFallback();
                     }
                 } catch (errUser) {
                     console.error("Eroare la procesarea profilului prin OData API:", errUser);
-                    executeFinalFallback();
                 }
             }
-
-            if (role === 'Admin' && userId) {
-                setUserName('Administrator');
-            }
-
-            // 5. Încărcare Antrenori + Normalizare structură OData
+            // 5. Încărcare Antrenori
             try {
                 const tResponse = await fetch(`https://localhost:7104/api/Trainers?companyId=${storedCompanyId}`, {
                     method: 'GET',
@@ -248,28 +251,6 @@ const Home = () => {
         }
     };
 
-    const processMembershipFallback = (rawId: any) => {
-        if (rawId) {
-            const mId = parseInt(rawId, 10);
-            if (mId === 1) setMembershipName("Standard Plan");
-            else if (mId === 2) setMembershipName("Premium Plan");
-            else if (mId === 3) setMembershipName("Gold VIP Pass");
-            else if (mId === 4) setMembershipName("Platinum Plan");
-            else setMembershipName("No Active Membership");
-        } else {
-            executeFinalFallback();
-        }
-    };
-
-    const executeFinalFallback = () => {
-        const savedMembershipId = localStorage.getItem(`membershipId_${userId}`) || localStorage.getItem('membershipId');
-        if (savedMembershipId) {
-            processMembershipFallback(savedMembershipId);
-            return;
-        }
-        setMembershipName("No Active Membership");
-    };
-
     const handleRoomInputChange = (e: any) => {
         const { name, value, type, checked } = e.target;
         setRoomForm({ ...roomForm, [name]: type === 'checkbox' ? checked : value });
@@ -294,7 +275,6 @@ const Home = () => {
                 CompanyId: companyIdInt
             };
 
-            const token = localStorage.getItem('token') || localStorage.getItem('userToken');
             const response = await fetch('https://localhost:7104/odata/Rooms', {
                 method: 'POST',
                 headers: {
@@ -323,7 +303,6 @@ const Home = () => {
                 companyId: companyIdInt
             };
 
-            const token = localStorage.getItem('token') || localStorage.getItem('userToken');
             const response = await fetch('https://localhost:7104/api/Workouts', {
                 method: 'POST',
                 headers: {
@@ -382,7 +361,6 @@ const Home = () => {
         };
 
         try {
-            const token = localStorage.getItem('token') || localStorage.getItem('userToken');
             const response = await fetch('https://localhost:7104/api/Sessions/validate-and-create', {
                 method: 'POST',
                 headers: {
@@ -407,7 +385,6 @@ const Home = () => {
 
     const handleEnrollSession = async (sessionId: any) => {
         try {
-            const token = localStorage.getItem('token') || localStorage.getItem('userToken');
             const cleanPayload = { sessionId: parseInt(sessionId, 10), userId: parseInt(userId, 10) };
 
             const response = await fetch(`https://localhost:7104/api/Sessions/enroll`, {
@@ -532,7 +509,7 @@ const Home = () => {
         };
     };
 
-    const daysLeft = getDaysLeft();
+    const token = localStorage.getItem('token') || localStorage.getItem('userToken');
 
     return (
         <div className="home-page-wrapper">
@@ -552,7 +529,7 @@ const Home = () => {
                         </>
                     )}
 
-                    {/* 🔓 ACCES MIXT: ADMIN & TRAINER (Corectat: redă butoanele de Workout și Clase) */}
+                    {/* 🔓 ACCES MIXT: ADMIN & TRAINER */}
                     {(role === 'Admin' || role === 'Trainer') && (
                         <>
                             <button onClick={() => setActiveTab('workouts')} style={getTopNavBtnStyle('workouts')}>New Workout</button>
