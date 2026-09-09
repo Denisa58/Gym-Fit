@@ -14,7 +14,7 @@ Aplicație web completă pentru managementul unei săli de fitness, destinată e
   - Creare și adăugare de noi sesiuni de antrenament vizibile pe pagina principală.
 - **Administratori (Admins):**
   - Adăugare de noi antrenori și săli de antrenament.
-  - Creare și gestionare antrenamente.
+  - Creare și gestionare antrenamente și abonamente.
   - Monitorizare și evidență completă a utilizatorilor înscriși.
 
 ## Tehnologii Utilizate
