@@ -22,4 +22,4 @@ Aplicație web completă pentru managementul unei săli de fitness, destinată e
 - **Backend:** C# (.NET / OData)
 - **Frontend:** React, TypeScript
 - **Bază de Date:** PostgreSQL
-- **Tooling:** Git, GitHub
+
